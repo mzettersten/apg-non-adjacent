@@ -18,6 +18,10 @@ Here is a direct link to the html output of the R Markdown file in the data fold
 
 http://htmlpreview.github.io/?https://github.com/mzettersten/apg-non-adjacent/blob/master/data/APG_analysis.html
 
+## Stimuli
+
+The stimuli folder contains all stimuli used across the three experiments (pre-exposure, exposure and test stimuli).
+
 ## Questions
 
 Feel free to contact me at **zettersten@wisc.edu** if you have any comments or questions about the data or the analyses.
