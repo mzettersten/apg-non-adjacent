@@ -6,7 +6,7 @@ Stimuli, data, and analysis scripts for APG non-adjacent dependency learning stu
 The folder data contains the following documents
 
 - **APG_data.txt**: The complete data set
-- **AOG_analysis.R**: An R script documenting all analyses included in the manuscript
+- **APG_analysis.R**: An R script documenting all analyses included in the manuscript
 - **APG_analysis.Rmd**: An R markdown file documenting the central models reported in the manuscript
 - **APG_analysis.html**: The R markdown file exported as an html (if you only want to inspect the models and their summary outputs rather than reproduce the analyses in R)
 - **APG_codebook.txt**: A codebook for the dataset "APG_data.txt"
