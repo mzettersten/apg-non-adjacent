@@ -1,0 +1,28 @@
+##APG Codebook
+
+participantCode: Unique participant ID
+ResponseId: Corresponding unique ID of participant for post-study questionnaire on qualtrics
+seed: Random seed used for generating random order of test trials             
+condition: Pre-Exposure Condition (Non-Learnable Pre-Exposure, Learnable Pre-Exposure, No Pre-Exposure, Unstructured Pre-Exposure)
+preExpOrder: Which pre-exposure order participants saw (A or B)
+exposureLang: Which exposure language participants saw (1 or 2)
+expOrder: Which exposure language participants saw (A or B)   
+stimulus: Current test stimulus
+language: Whether the test stimulus is consistent with language 1 (L1) or language 2 (L2)
+testType: Test trial type (recognition or generalization)
+correctResponse: What the correct keyboard response (consistent - y -  or inconsistent - n - with the exposure language=y)   
+curTrialIndex: Test trial number (1 - 36)
+curBlockIndex: Block number (1 - 2)
+response: Recorded keyboard response (y or n)
+isRight: Whether the response is correct - 1 -  or incorrect - 0
+rt: Reaction time (in ms)
+exp: Experiment version/ number (exp1, exp2, exp3)
+offset: Chance performance (0.5) - useful constant for model fitting
+pattern: Participants' response to the question "Did you notice any patterns in the language you heard?"
+patternExplanation: Participants' description of the pattern
+age: Participants' self-reported age (in years)
+gender: Participants' self-reported gender (Male or Female)
+country: Participants' self-reported country of origin
+nativeLang: Participants' self-reported native language   
+secondLang: Participants' self-reported other spoken languages
+nativeLangEng: Whether or not participants reported English as a native language (1 = English is a native language, 0 otherwise)
