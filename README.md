@@ -1,9 +1,9 @@
 # apg-non-adjacent
 Stimuli, data, and analysis scripts for APG non-adjacent dependency learning study (Zettersten, Potter, and Saffran)
 
-## Data
+## Data & Analysis
 
-The folder data contains the following documents
+The folder data_analysis contains the following documents
 
 - **APG_data.txt**: The complete data set
 - **APG_analysis.R**: An R script documenting all analyses included in the manuscript
@@ -16,7 +16,7 @@ The folder data contains the following documents
 
 Here is a direct link to the html output of the R Markdown file in the data folder. This provides a walkthrough of the major analyses in the paper.
 
-http://htmlpreview.github.io/?https://github.com/mzettersten/apg-non-adjacent/blob/master/data/APG_analysis.html
+http://htmlpreview.github.io/?https://github.com/mzettersten/apg-non-adjacent/blob/master/data_analysis/APG_analysis.html
 
 ## Stimuli
 
