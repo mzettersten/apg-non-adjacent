@@ -16,7 +16,7 @@ The folder data_analysis contains the following documents
 
 Here is a direct link to the html output of the R Markdown file in the data folder. This provides a walkthrough of the major analyses in the paper.
 
-http://htmlpreview.github.io/?https://github.com/mzettersten/apg-non-adjacent/blob/master/data_analysis/APG_analysis.html
+https://mzettersten.github.io/apg-non-adjacent/data_analysis/APG_analysis.html
 
 ## Stimuli
 
