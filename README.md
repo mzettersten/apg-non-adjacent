@@ -14,7 +14,7 @@ The folder data_analysis contains the following documents
 
 ## Analysis Walkthrough
 
-Here is a direct link to the html output of the R Markdown file in the data folder. This provides a walkthrough of the major analyses in the paper.
+Here is a direct link to the html rendering of the R Markdown file in the data folder. This provides a walkthrough of the major analyses in the paper.
 
 https://mzettersten.github.io/apg-non-adjacent/data_analysis/APG_analysis.html
 
