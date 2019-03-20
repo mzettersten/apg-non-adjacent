@@ -10,7 +10,7 @@ expOrder: Which exposure language participants saw (A or B)
 stimulus: Current test stimulus
 language: Whether the test stimulus is consistent with language 1 (L1) or language 2 (L2)
 testType: Test trial type (recognition or generalization)
-correctResponse: What the correct keyboard response (consistent - y -  or inconsistent - n - with the exposure language=y)   
+correctResponse: What the correct keyboard response (consistent - y -  or inconsistent - n - with the exposure language)   
 curTrialIndex: Test trial number (1 - 36)
 curBlockIndex: Block number (1 - 2)
 response: Recorded keyboard response (y or n)
