@@ -5,7 +5,7 @@ library(formattable) # version 0.2.0.1
 library(lme4) # version 1.1-18-1
 library(plyr) # version 1.8.4
 library(psych) # version 1.8.4
-library(stats) # version 3.5.1
+library(stats) # version 3.5.2
 library(tidyverse) # version 1.2.1
 source("summarizeData.R") #set of helper functions for summarizing data
 
@@ -68,7 +68,7 @@ Anova(m, type="III") #Wald chi-squared test yields similar results to z-values a
 #recognition test
 #maximal model
 #m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp1"&testType=="recognition"),family=binomial,glmerControl(optimizer="bobyqa")) #convergence warning
-# removing the random effect with an estimated covariance of zero (identical results)
+#removing the random effect with an estimated covariance of zero (identical results)
 m <- glmer(isRight~conditionC+(1|participantCode)+(0+conditionC|stimulus),data=subset(d,exp=="exp1"&testType=="recognition"),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
 confint(m, method="Wald")
@@ -204,8 +204,7 @@ summary(m)
 ####Hits vs. False Alarm Rates Experiment 2
 #split by test type and correct response type
 subjType <- ddply(d,.(participantCode,exp,testType, correctResponse,condition),summarize,
-              acc=mean(isRight),
-              rt=mean(rt[rt<5000]))
+              acc=mean(isRight))
 
 #test type
 response_type_exp <-  summarySE(subjType, "acc", groupvars=c("exp","condition","testType","correctResponse"))
@@ -269,7 +268,7 @@ summary(m)
 
 #Experiment 1
 #Recognition Test
-p1=ggplot(subset(test_type_exp,testType=="recognition"&exp=="exp1"),aes(condition,acc,fill=condition, color=condition))+
+p1 <- ggplot(subset(test_type_exp,testType=="recognition"&exp=="exp1"),aes(condition,acc,fill=condition, color=condition))+
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
   geom_jitter(data=subset(subj_testType,testType=="recognition"&exp=="exp1"), width = 0.05, alpha=0.6,shape=21)+
   geom_errorbar(aes(ymin=acc-se,ymax=acc+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
@@ -286,7 +285,7 @@ p1=ggplot(subset(test_type_exp,testType=="recognition"&exp=="exp1"),aes(conditio
   xlab("Condition")
 
 #Generalization Test
-p2=ggplot(subset(test_type_exp,testType=="generalization"&exp=="exp1"),aes(condition,acc,fill=condition,color=condition))+
+p2 <- ggplot(subset(test_type_exp,testType=="generalization"&exp=="exp1"),aes(condition,acc,fill=condition,color=condition))+
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
   geom_jitter(data=subset(subj_testType,testType=="generalization"&exp=="exp1"), width = 0.05, alpha=0.6,shape=21)+
   geom_errorbar(aes(ymin=acc-se,ymax=acc+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+

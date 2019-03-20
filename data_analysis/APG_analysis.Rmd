@@ -15,7 +15,7 @@ library(formattable) # version 0.2.0.1
 library(lme4) # version 1.1-18-1
 library(plyr) # version 1.8.4
 library(psych) # version 1.8.4
-library(stats) # version 3.5.1
+library(stats) # version 3.5.2
 library(tidyverse) # version 1.2.1
 source("summarizeData.R") #set of helper functions for summarizing data
 
@@ -75,7 +75,7 @@ For details on the rationale for individual analyses, see the corresponding pape
 
 ```{r}
 #Recognition Test
-p1=ggplot(subset(test_type_exp,testType=="recognition"&exp=="exp1"),aes(condition,acc,fill=condition, color=condition))+
+p1 <- ggplot(subset(test_type_exp,testType=="recognition"&exp=="exp1"),aes(condition,acc,fill=condition, color=condition))+
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
   geom_jitter(data=subset(subj_testType,testType=="recognition"&exp=="exp1"), width = 0.05, alpha=0.6,shape=21)+
   geom_errorbar(aes(ymin=acc-se,ymax=acc+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
@@ -92,7 +92,7 @@ p1=ggplot(subset(test_type_exp,testType=="recognition"&exp=="exp1"),aes(conditio
   xlab("Condition")
 
 #Generalization Test
-p2=ggplot(subset(test_type_exp,testType=="generalization"&exp=="exp1"),aes(condition,acc,fill=condition,color=condition))+
+p2 <- ggplot(subset(test_type_exp,testType=="generalization"&exp=="exp1"),aes(condition,acc,fill=condition,color=condition))+
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
   geom_jitter(data=subset(subj_testType,testType=="generalization"&exp=="exp1"), width = 0.05, alpha=0.6,shape=21)+
   geom_errorbar(aes(ymin=acc-se,ymax=acc+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
@@ -322,7 +322,7 @@ c$p
 
 ```{r}
 #interaction
-subj_accuracy_wide$conditionC=ifelse(subj_accuracy_wide$condition=="Learnable Pre-Exposure",0.5,
+subj_accuracy_wide$conditionC <- ifelse(subj_accuracy_wide$condition=="Learnable Pre-Exposure",0.5,
                            ifelse(subj_accuracy_wide$condition=="Non-Learnable Pre-Exposure",-0.5,
                                   ifelse(subj_accuracy_wide$condition=="No Pre-Exposure",0,NA)))
 m <- lm(generalization~recognition*conditionC, subset(subj_accuracy_wide,exp=="exp2"))
@@ -359,7 +359,7 @@ d$conditionOrthContrast2 <- ifelse(d$condition=="Learnable Pre-Exposure",-1/3,
 #overall analysis (Richter single-contrast apporach)
 m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp2"),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
-confint(m, method="Wald")
+confint(m, method="Wald")[5:6,]
 
 ##check same analysis with Abelson & Prentice approach
 #m=glmer(isRight~conditionC+conditionOrthContrast2+(1|participantCode)+(1+conditionC+conditionOrthContrast2|stimulus),data=subset(d,exp=="exp2"),family=binomial,glmerControl(optimizer="bobyqa")) #convergence warning
@@ -373,7 +373,7 @@ summary(m)
 #Learnable
 m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&conditionC==0.5),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
-confint(m, method="Wald")
+confint(m, method="Wald")[3,]
 ```
 
 #####Testing against chance: No Pre-Exposure
@@ -381,7 +381,7 @@ confint(m, method="Wald")
 ```{r}
 m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&conditionC==0),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
-confint(m, method="Wald")
+confint(m, method="Wald")[3,]
 ```
 
 #####Testing against chance: Non-Learnable Pre-Exposure
@@ -389,7 +389,7 @@ confint(m, method="Wald")
 ```{r}
 m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&conditionC==-0.5),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
-confint(m, method="Wald")
+confint(m, method="Wald")[3,]
 ```
 
 #### Pairwise condition comparisons
@@ -399,21 +399,21 @@ confint(m, method="Wald")
 #Learnable vs. Non-Learnable
 m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp2"&conditionC!=0),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
-confint(m, method="Wald")
+confint(m, method="Wald")[5:6,]
 
 #Non-Learnable vs. No Pre-Exposure
 d$conditionNonLearnableNoPreExp <- ifelse(d$conditionC==0.5,1.5,
                                     ifelse(d$conditionC==0,0.5,d$conditionC))
 m <- glmer(isRight~conditionNonLearnableNoPreExp+(1+conditionNonLearnableNoPreExp|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&conditionNonLearnableNoPreExp!=1.5),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
-confint(m, method="Wald")
+confint(m, method="Wald")[5:6,]
 
 #No Pre-Exposure vs. Learnable
 d$conditionLearnableNoPreExp <- ifelse(d$conditionC==-0.5,-1.5,
                                     ifelse(d$conditionC==0,-0.5,d$conditionC))
 m <- glmer(isRight~conditionLearnableNoPreExp+(1|participantCode)+(1+conditionLearnableNoPreExp|stimulus),data=subset(d,exp=="exp2"&conditionLearnableNoPreExp!=-1.5),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
-confint(m, method="Wald")
+confint(m, method="Wald")[5:6,]
 ```
 
 #### Recognition Trials
