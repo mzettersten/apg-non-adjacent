@@ -1,5 +1,6 @@
 # apg-non-adjacent
-Stimuli, data, and analysis scripts for APG non-adjacent dependency learning study:
+Stimuli, data, and analysis scripts for APG non-adjacent dependency learning study.
+
 Tuning in to non-adjacencies: Exposure to learnable patterns supports discovering otherwise difficult structures 
 (Zettersten, Potter, and Saffran)
 
