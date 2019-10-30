@@ -9,28 +9,55 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-library(car) #version 3.0-2
-library(cowplot) # version 0.9.3
-library(formattable) # version 0.2.0.1
-library(lme4) # version 1.1-18-1
-library(plyr) # version 1.8.4
-library(psych) # version 1.8.4
-library(stats) # version 3.5.2
 library(tidyverse) # version 1.2.1
-source("summarizeData.R") #set of helper functions for summarizing data
+library(cowplot) # version 1.0.0
+theme_set(theme_cowplot())
+library(formattable) # version 0.2.0.1
+library(lme4) # version 1.1-21
+#library(plyr) # version 1.8.4
+library(psych) # version 1.8.12
+library(stats) # version 3.6.1
+library(sciplot) #version 1.1-1
+library(car) #version 3.0-3
+
 
 #### read in complete data set ####
 d <- read.table("APG_data.txt", header=T)
 
+#add columns for hits and false alarms
+#used for traditional signal detection analysis
+d$hits = ifelse(d$correctResponse=="y",d$isRight,NA)
+d$falseAlarms = ifelse(d$correctResponse=="n",1-d$isRight,NA)
+
+
 #### demographics & overall means ####
-#subject means
+#subject means, dprime, response bias
+#computation of adjusted hit rates and false alarm rates uses Macmillan & Kaplan (1985) adjustment
 subj_overall <- d %>%
   group_by(participantCode, exp, condition) %>%
   summarize(age=age[1],
             gender = gender[1],
             nativeLangEng = nativeLangEng[1],
             acc=mean(isRight),
-            rt=mean(rt[rt<5000]))
+            rt=mean(rt[rt<5000]),
+            hitRate=mean(hits,na.rm=T),
+            falseAlarmRate=mean(falseAlarms,na.rm=T)) %>%
+  mutate(
+    hitRateAdjusted= case_when(
+      hitRate==1 ~ 1 - 1/(2*18),
+      hitRate==0 ~ 1/(2*18),
+      TRUE ~ hitRate
+    ),
+    falseAlarmRateAdjusted= case_when(
+      falseAlarmRate==0 ~ 1/(2*18),
+      falseAlarmRate==1 ~ 1 - 1/(2*18),
+      TRUE ~ falseAlarmRate
+    )
+  ) %>%
+  mutate(
+    dprime=qnorm(hitRateAdjusted) - qnorm(falseAlarmRateAdjusted),
+    c=-.5*(qnorm(hitRateAdjusted) + qnorm(falseAlarmRateAdjusted)))
+
 #total demographics
 demo <- subj_overall %>%
   group_by(exp) %>%
@@ -47,20 +74,111 @@ demo <- subj_overall %>%
 #split accuracy by test type
 subj_testType <- d %>%
   group_by(participantCode,exp,testType, condition) %>%
-  summarize(acc=mean(isRight),rt=mean(rt[rt<5000]))
+  summarize(
+    acc=mean(isRight),
+    rt=mean(rt[rt<5000]),
+    hitRate=mean(hits,na.rm=T),
+    falseAlarmRate=mean(falseAlarms,na.rm=T)) %>%
+  mutate(
+    hitRateAdjusted= case_when(
+      hitRate==1 ~ 1 - 1/(2*9),
+      hitRate==0 ~ 1/(2*9),
+      TRUE ~ hitRate
+    ),
+    falseAlarmRateAdjusted= case_when(
+      falseAlarmRate==0 ~ 1/(2*9),
+      falseAlarmRate==1 ~ 1 - 1/(2*9),
+      TRUE ~ falseAlarmRate
+    )
+  ) %>%
+  mutate(
+    dprime=qnorm(hitRateAdjusted) - qnorm(falseAlarmRateAdjusted),
+    c=-.5*(qnorm(hitRateAdjusted) + qnorm(falseAlarmRateAdjusted)))
 
-#create a wide format data set to correlate recognition and generalization accuracy
-subj_accuracy_wide <- spread(subset(subj_testType, select=-c(rt)), testType, acc)
+#create a wide format data set to correlate Familiar X and Novel X accuracy
+subj_accuracy_wide <- spread(subset(subj_testType, select=-c(rt,dprime,c,hitRate,hitRateAdjusted,falseAlarmRate, falseAlarmRateAdjusted)), testType, acc)
 
-#all experiment conditions
-overall_exp <-  summarySE(subj_overall, "acc", groupvars=c("exp","condition"))
-overall_exp$lowerCI <-  overall_exp$acc - overall_exp$ci
-overall_exp$upperCI <-  overall_exp$acc + overall_exp$ci
+#all experiment conditions - average accuracy, dprime, response bias
+overall_exp <- subj_overall %>%
+  group_by(exp,condition) %>%
+  summarize(
+    N=sum(!is.na(acc)),
+    accuracy=mean(acc,na.rm=T),
+    se=se(acc,na.rm=T),
+    accuracy_ci=qt(0.975, N-1)*sd(acc,na.rm=T)/sqrt(N),
+    accuracy_lower_ci=accuracy-accuracy_ci,
+    accuracy_upper_ci=accuracy+accuracy_ci,
+    d_prime=mean(dprime,na.rm=T),
+    d_prime_ci=qt(0.975, N-1)*sd(dprime,na.rm=T)/sqrt(N),
+    d_prime_lower_ci=d_prime-d_prime_ci,
+    d_prime_upper_ci=d_prime+d_prime_ci,
+    c_bias=mean(c,na.rm=T),
+    c_bias_ci=qt(0.975, N-1)*sd(c,na.rm=T)/sqrt(N),
+    c_bias_lower_ci=c_bias-c_bias_ci,
+    c_bias_upper_ci=c_bias+c_bias_ci
+  )
 
-#test type
-test_type_exp <-  summarySE(subj_testType, "acc", groupvars=c("exp","condition","testType"))
-test_type_exp$lowerCI <-  test_type_exp$acc - test_type_exp$ci
-test_type_exp$upperCI <-  test_type_exp$acc + test_type_exp$ci
+#split by test type - average accuracy, dprime, response bias
+test_type_exp <- subj_testType %>%
+  group_by(exp,condition,testType) %>%
+  summarize(
+    N=sum(!is.na(acc)),
+    accuracy=mean(acc,na.rm=T),
+    se=se(acc,na.rm=T),
+    accuracy_ci=qt(0.975, N-1)*sd(acc,na.rm=T)/sqrt(N),
+    accuracy_lower_ci=accuracy-accuracy_ci,
+    accuracy_upper_ci=accuracy+accuracy_ci,
+    d_prime=mean(dprime,na.rm=T),
+    d_prime_ci=qt(0.975, N-1)*sd(dprime,na.rm=T)/sqrt(N),
+    d_prime_lower_ci=d_prime-d_prime_ci,
+    d_prime_upper_ci=d_prime+d_prime_ci,
+    c_bias=mean(c,na.rm=T),
+    c_bias_ci=qt(0.975, N-1)*sd(c,na.rm=T)/sqrt(N),
+    c_bias_lower_ci=c_bias-c_bias_ci,
+    c_bias_upper_ci=c_bias+c_bias_ci
+  )
+
+#collapsing across all experiments
+#all conditions - average accuracy, dprime, response bias
+overall <- subj_overall %>%
+  group_by(condition) %>%
+  summarize(
+    N=sum(!is.na(acc)),
+    se=se(acc,na.rm=T),
+    accuracy=mean(acc,na.rm=T),
+    accuracy_ci=qt(0.975, N-1)*sd(acc,na.rm=T)/sqrt(N),
+    accuracy_lower_ci=accuracy-accuracy_ci,
+    accuracy_upper_ci=accuracy+accuracy_ci,
+    d_prime=mean(dprime,na.rm=T),
+    d_prime_ci=qt(0.975, N-1)*sd(dprime,na.rm=T)/sqrt(N),
+    d_prime_lower_ci=d_prime-d_prime_ci,
+    d_prime_upper_ci=d_prime+d_prime_ci,
+    c_bias=mean(c,na.rm=T),
+    c_bias_ci=qt(0.975, N-1)*sd(c,na.rm=T)/sqrt(N),
+    c_bias_lower_ci=c_bias-c_bias_ci,
+    c_bias_upper_ci=c_bias+c_bias_ci
+  )
+
+#collapsing across all experiments
+#split by test type - average accuracy, dprime, response bias
+test_type <- subj_testType %>%
+  group_by(condition,testType) %>%
+  summarize(
+    N=sum(!is.na(acc)),
+    accuracy=mean(acc,na.rm=T),
+    se=se(acc,na.rm=T),
+    accuracy_ci=qt(0.975, N-1)*sd(acc,na.rm=T)/sqrt(N),
+    accuracy_lower_ci=accuracy-accuracy_ci,
+    accuracy_upper_ci=accuracy+accuracy_ci,
+    d_prime=mean(dprime,na.rm=T),
+    d_prime_ci=qt(0.975, N-1)*sd(dprime,na.rm=T)/sqrt(N),
+    d_prime_lower_ci=d_prime-d_prime_ci,
+    d_prime_upper_ci=d_prime+d_prime_ci,
+    c_bias=mean(c,na.rm=T),
+    c_bias_ci=qt(0.975, N-1)*sd(c,na.rm=T)/sqrt(N),
+    c_bias_lower_ci=c_bias-c_bias_ci,
+    c_bias_upper_ci=c_bias+c_bias_ci
+  )
 ```
 
 Analysis walkthrough for "Tuning in to non-adjacencies: Exposure to learnable patterns supports discovering otherwise difficult structures" (Zettersten, Potter & Saffran).
@@ -69,16 +187,16 @@ For details on the rationale for individual analyses, see the corresponding pape
 
 ## Experiment 1
 
-###Test Accuracy {.tabset}
+### Test Accuracy {.tabset}
 
-####Accuracy Plot
+#### Accuracy Plot
 
 ```{r}
-#Recognition Test
-p1 <- ggplot(subset(test_type_exp,testType=="recognition"&exp=="exp1"),aes(condition,acc,fill=condition, color=condition))+
+#Familiar X Test
+p1 <- ggplot(subset(test_type_exp,testType=="familiarX"&exp=="exp1"),aes(condition,accuracy,fill=condition, color=condition))+
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
-  geom_jitter(data=subset(subj_testType,testType=="recognition"&exp=="exp1"), width = 0.05, alpha=0.6,shape=21)+
-  geom_errorbar(aes(ymin=acc-se,ymax=acc+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
+  geom_jitter(data=subset(subj_testType,testType=="familiarX"&exp=="exp1"),aes(y=acc), width = 0.05, alpha=0.6,shape=21)+
+  geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
   theme_classic(base_size=16)+
   geom_hline(yintercept=0.5, linetype="dotted")+
   scale_x_discrete(name="Condition",
@@ -88,14 +206,14 @@ p1 <- ggplot(subset(test_type_exp,testType=="recognition"&exp=="exp1"),aes(condi
   scale_fill_manual(values=c("#4DAF4A","#E41A1C"))+
   scale_color_manual(values=c("#4DAF4A","#E41A1C"))+
   theme(legend.position="none")+
-  ylab("Accuracy - Recognition Test")+
+  ylab("Accuracy - Familiar X Test")+
   xlab("Condition")
 
-#Generalization Test
-p2 <- ggplot(subset(test_type_exp,testType=="generalization"&exp=="exp1"),aes(condition,acc,fill=condition,color=condition))+
+#Novel X
+p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="exp1"),aes(condition,accuracy,fill=condition,color=condition))+
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
-  geom_jitter(data=subset(subj_testType,testType=="generalization"&exp=="exp1"), width = 0.05, alpha=0.6,shape=21)+
-  geom_errorbar(aes(ymin=acc-se,ymax=acc+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
+  geom_jitter(data=subset(subj_testType,testType=="novelX"&exp=="exp1"),aes(y=acc), width = 0.05, alpha=0.6,shape=21)+
+  geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
   theme_classic(base_size=16)+
   geom_hline(yintercept=0.5, linetype="dotted")+
   scale_x_discrete(name="Condition",
@@ -105,149 +223,438 @@ p2 <- ggplot(subset(test_type_exp,testType=="generalization"&exp=="exp1"),aes(co
   scale_fill_manual(values=c("#4DAF4A","#E41A1C"))+
   scale_color_manual(values=c("#4DAF4A","#E41A1C"))+
   theme(legend.position="none")+
-  ylab("Accuracy - Generalization Test")+
+  ylab("Accuracy - Novel X")+
   xlab("Condition")
 plot_grid(p1,p2, labels=c("A","B"),label_size=18)
 ```
 
-####Overall Accuracy Table
+#### Overall Accuracy Table
 
 ```{r}
-formattable(subset(subset(overall_exp,exp=="exp1"),select=-c(sd,se,ci)))
+overall_exp %>%
+  filter(exp=="exp1") %>%
+  select(-c(se, accuracy_ci,d_prime_ci,c_bias_ci)) %>%
+  formattable()
 ```
 
-####Accuracy Table By Test Type
+#### Accuracy Table By Test Type
 
 ```{r}
-formattable(subset(subset(test_type_exp, exp=="exp1"),select=-c(sd,se,ci)))
+test_type_exp %>%
+  filter(exp=="exp1") %>%
+  select(-c(se, accuracy_ci,d_prime_ci,c_bias_ci)) %>%
+  formattable()
 ```
 
-####Correlation
+#### Correlation
 
-#####Correlation between recognition and generalization trials: Learnable Pre-Exposure
+##### Correlation between Familiar X and Novel X Trials: Learnable Pre-Exposure
 ```{r}
-##Correlations between Recognition and Generalization Test
-c <- corr.test(subset(subj_accuracy_wide, condition=="Learnable Pre-Exposure" & exp=="exp1")[,c("generalization","recognition")])
+##Correlations between Familiar X and Novel X
+c <- corr.test(subset(subj_accuracy_wide, condition=="Learnable Pre-Exposure" & exp=="exp1")[,c("novelX","familiarX")])
 c
 c$p
 ```
 
-#####Correlation between recognition and generalization trials: Non-Learnable Pre-Exposure
+##### Correlation between Familiar X and Novel X Trials: Non-Learnable Pre-Exposure
 ```{r}
-c <- corr.test(subset(subj_accuracy_wide, condition=="Non-Learnable Pre-Exposure" & exp=="exp1")[,c("generalization","recognition")])
+c <- corr.test(subset(subj_accuracy_wide, condition=="Non-Learnable Pre-Exposure" & exp=="exp1")[,c("novelX","familiarX")])
 c
 c$p
 ```
 
-Compute correlation without outlier participant with perfect recognition and generalization accuracy
+Compute correlation without outlier participant with perfect Familiar X and Novel X accuracy
 
 ```{r}
 #check outlier in Non-Learnable Pre-Exposure Condition
-outlierTest(lm(generalization~recognition,subset(subj_accuracy_wide,exp=="exp1"&condition=="Non-Learnable Pre-Exposure")))
+outlierTest(lm(novelX~familiarX,subset(subj_accuracy_wide,exp=="exp1"&condition=="Non-Learnable Pre-Exposure")))
 #correlation without outlier
-c <- corr.test(subset(subj_accuracy_wide, condition=="Non-Learnable Pre-Exposure" & exp=="exp1"&participantCode!="apg_exp1_p7")[,c("generalization","recognition")])
+c <- corr.test(subset(subj_accuracy_wide, condition=="Non-Learnable Pre-Exposure" & exp=="exp1"&participantCode!="apg_exp1_p7")[,c("novelX","familiarX")])
 c
 c$p
 ```
 
-#####Interaction between Test Type and Condition
+##### Interaction between Test Type and Condition
 ```{r}
-m <- lm(generalization~recognition*condition, subset(subj_accuracy_wide,exp=="exp1"))
+m <- lm(novelX~familiarX*condition, subset(subj_accuracy_wide,exp=="exp1"))
 summary(m)
 ```
 
-####Correlation Plot
+#### Correlation Plot
 
 ```{r}
-ggplot(subset(subj_accuracy_wide,exp=="exp1"),aes(recognition,generalization, color=condition,linetype=condition,shape=condition))+
+ggplot(subset(subj_accuracy_wide,exp=="exp1"),aes(familiarX,novelX, color=condition,linetype=condition,shape=condition))+
   geom_jitter(width=0.02,height=0.02,size=3)+
   geom_smooth(method=lm,se =F,size=1.5)+
   scale_color_manual(name="Condition",values=c("#4DAF4A","#E41A1C"))+
   scale_linetype_discrete(name="Condition")+
   scale_shape_discrete(name="Condition")+
-  ylab("Accuracy - Generalization")+
-  xlab("Accuracy - Recognition")+
+  ylab("Accuracy - novelX")+
+  xlab("Accuracy - familiarX")+
   theme_classic(base_size=18)+
   theme(legend.position=c(0.3,0.9))
 ```
 
+### Logistic Mixed-Effects Model {.tabset}
 
-###Model {.tabset}
+#### Overall {.tabset}
 
-#### Overall
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge, as reported in the manuscript.
+
 ```{r}
+##all data
 #recode condition
 d$conditionC <- ifelse(d$condition=="Learnable Pre-Exposure",0.5,
                     ifelse(d$condition=="Non-Learnable Pre-Exposure",-0.5,NA))
+m <- glmer(isRight~conditionC+(1|participantCode)+(0+conditionC|stimulus),data=subset(d,exp=="exp1"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[3:4,]
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
 ##all data
 m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp1"),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
 confint(m, method="Wald")[5:6,]
 ```
 
-#### Recognition Trials
 
-#####Condition Effect
+#### Familiar X Trials
+
+##### Condition Effect {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge, as reported in the manuscript.
 
 ```{r}
-#maximal model
-#m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp1"&testType=="recognition"),family=binomial,glmerControl(optimizer="bobyqa")) #convergence warning
-# removing the random effect with an estimated covariance of zero (identical results)
-m <- glmer(isRight~conditionC+(1|participantCode)+(0+conditionC|stimulus),data=subset(d,exp=="exp1"&testType=="recognition"),family=binomial,glmerControl(optimizer="bobyqa"))
+# excluding the random effect with an estimated covariance of zero (identical results)
+m <- glmer(isRight~conditionC+(1|participantCode)+(0+conditionC|stimulus),data=subset(d,exp=="exp1"&testType=="familiarX"),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
 confint(m, method="Wald")[3:4,]
 ```
 
-#####Testing against chance: Learnable Pre-Exposure
-```{r}
-m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp1"&testType=="recognition"&conditionC==0.5),family=binomial,glmerControl(optimizer="bobyqa"))
-summary(m)
-confint(m, method="Wald")[3,]
-```
 
-#####Testing against chance: Non-Learnable Pre-Exposure
-```{r}
-m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp1"&testType=="recognition"&conditionC==-0.5),family=binomial,glmerControl(optimizer="bobyqa"))
-summary(m)
-confint(m, method="Wald")[3,]
-```
+###### Maximal Random Effects Model
 
-####Generalization Test Trials
-
-#####Condition Effect
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution (though the parameter estimates and test statistics are highly similar to the converging model).
 
 ```{r}
-m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp1"&testType=="generalization"),family=binomial,glmerControl(optimizer="bobyqa"))
+#maximal model
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp1"&testType=="familiarX"),family=binomial,glmerControl(optimizer="bobyqa")) #convergence warning
 summary(m)
 confint(m, method="Wald")[5:6,]
 ```
 
-#####Testing against chance: Learnable Pre-Exposure
+##### Testing against chance: Learnable Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge, as reported in the manuscript.
+
 ```{r}
-m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp1"&testType=="generalization"&conditionC==0.5),family=binomial,glmerControl(optimizer="bobyqa"))
+m <- glmer(isRight~1+(1|participantCode),data=subset(d,exp=="exp1"&testType=="familiarX"&conditionC==0.5),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
-confint(m, method="Wald")[3,]
+confint(m, method="Wald")
 ```
 
-#####Testing against chance: Non-Learnable Pre-Exposure
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution (though the parameter estimates and test statistics are highly similar to the converging model).
+
 ```{r}
-m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp1"&testType=="generalization"&conditionC==-0.5),family=binomial,glmerControl(optimizer="bobyqa"))
+m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp1"&testType=="familiarX"&conditionC==0.5),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
-confint(m, method="Wald")[3,]
+confint(m, method="Wald")
+```
+
+##### Testing against chance: Non-Learnable Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge, as reported in the manuscript.
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode),data=subset(d,exp=="exp1"&testType=="familiarX"&conditionC==-0.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution (though the parameter estimates and test statistics are highly similar to the converging model).
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp1"&testType=="familiarX"&conditionC==-0.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+#### Novel X Trials
+
+##### Condition Effect {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge, as reported in the manuscript.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode)+(0+conditionC|stimulus),data=subset(d,exp=="exp1"&testType=="novelX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution (though the parameter estimates and test statistics are highly similar to the converging model).
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp1"&testType=="novelX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[5:6,]
+```
+
+##### Testing against chance: Learnable Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge, as reported in the manuscript.
+
+```{r}
+#recode condition
+d$conditionL <- ifelse(d$condition=="Learnable Pre-Exposure",0,
+                    ifelse(d$condition=="Non-Learnable Pre-Exposure",-1,NA))
+
+m <- glmer(isRight~1+(1|participantCode),data=subset(d,exp=="exp1"&testType=="novelX"&conditionC==0.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution (though the parameter estimates and test statistics are highly similar to the converging model).
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp1"&testType=="novelX"&conditionC==0.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+##### Testing against chance: Non-Learnable Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge, as reported in the manuscript.
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode),data=subset(d,exp=="exp1"&testType=="novelX"&conditionC==-0.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution (though the parameter estimates and test statistics are highly similar to the converging model).
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp1"&testType=="novelX"&conditionC==-0.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+#### Interaction between test type and condition {.tabset}
+
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+#recode test type
+d$testTypeC <- ifelse(d$testType=="novelX",0.5,
+                    ifelse(d$testType=="familiarX",-0.5,NA))
+##all data
+m <- glmer(isRight~conditionC*testTypeC+(1|participantCode)+(0+conditionC|stimulus),data=subset(d,exp=="exp1"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[3:6,]
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+##all data
+m <- glmer(isRight~conditionC*testTypeC+(1+testTypeC|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp1"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[7:10,]
+```
+
+### Signal Detection Model 
+
+#### Sensitivity {.tabset}
+
+##### Overall
+```{r}
+#recode condition
+subj_overall$conditionC <- ifelse(subj_overall$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(subj_overall$condition=="Non-Learnable Pre-Exposure",-0.5,NA))
+##all data
+m <- lm(dprime~conditionC,data=subset(subj_overall,exp=="exp1"))
+summary(m)
+
+```
+
+##### Familiar X Trials
+
+###### Condition Effect
+
+```{r}
+#recode condition
+subj_testType$conditionC <- ifelse(subj_testType$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(subj_testType$condition=="Non-Learnable Pre-Exposure",-0.5,NA))
+
+m <- lm(dprime~conditionC,data=subset(subj_testType,exp=="exp1"&testType=="familiarX"))
+summary(m)
+
+```
+
+###### Testing against chance: Learnable Pre-Exposure
+```{r}
+m <- lm(dprime~1,data=subset(subj_testType,exp=="exp1"&testType=="familiarX"&conditionC==0.5))
+summary(m)
+```
+
+###### Testing against chance: Non-Learnable Pre-Exposure
+```{r}
+m <- lm(dprime~1,data=subset(subj_testType,exp=="exp1"&testType=="familiarX"&conditionC==-0.5))
+summary(m)
+
+```
+
+##### Novel X Trials
+
+###### Condition Effect
+
+```{r}
+m <- lm(dprime~conditionC,data=subset(subj_testType,exp=="exp1"&testType=="novelX"))
+summary(m)
+
+```
+
+###### Testing against chance: Learnable Pre-Exposure
+```{r}
+m <- lm(dprime~1,data=subset(subj_testType,exp=="exp1"&testType=="novelX"&conditionC==0.5))
+summary(m)
+
+```
+
+###### Testing against chance: Non-Learnable Pre-Exposure
+```{r}
+m <- lm(dprime~1,data=subset(subj_testType,exp=="exp1"&testType=="novelX"&conditionC==-0.5))
+summary(m)
+
+```
+
+##### Interaction between Novel X and Familiar X trials
+
+```{r}
+#recode test type
+subj_testType$testTypeC <- ifelse(subj_testType$testType=="novelX",0.5,
+                    ifelse(subj_testType$testType=="familiarX",-0.5,NA))
+m <- lm(dprime~conditionC*testTypeC,data=subset(subj_testType,exp=="exp1"))
+summary(m)
+```
+
+#### Response Bias {.tabset}
+
+##### Overall
+```{r}
+#recode condition
+subj_overall$conditionC <- ifelse(subj_overall$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(subj_overall$condition=="Non-Learnable Pre-Exposure",-0.5,NA))
+##all data
+m <- lm(c~conditionC,data=subset(subj_overall,exp=="exp1"))
+summary(m)
+
+```
+
+##### Familiar X Trials
+
+###### Condition Effect
+
+```{r}
+#recode condition
+subj_testType$conditionC <- ifelse(subj_testType$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(subj_testType$condition=="Non-Learnable Pre-Exposure",-0.5,NA))
+
+m <- lm(c~conditionC,data=subset(subj_testType,exp=="exp1"&testType=="familiarX"))
+summary(m)
+
+```
+
+###### Testing against chance: Learnable Pre-Exposure
+```{r}
+m <- lm(c~1,data=subset(subj_testType,exp=="exp1"&testType=="familiarX"&conditionC==0.5))
+summary(m)
+
+```
+
+###### Testing against chance: Non-Learnable Pre-Exposure
+```{r}
+m <- lm(c~1,data=subset(subj_testType,exp=="exp1"&testType=="familiarX"&conditionC==-0.5))
+summary(m)
+
+```
+
+##### Novel X Trials
+
+###### Condition Effect
+
+```{r}
+m <- lm(c~conditionC,data=subset(subj_testType,exp=="exp1"&testType=="novelX"))
+summary(m)
+
+```
+
+###### Testing against chance: Learnable Pre-Exposure
+```{r}
+m <- lm(c~1,data=subset(subj_testType,exp=="exp1"&testType=="novelX"&conditionC==0.5))
+summary(m)
+
+```
+
+###### Testing against chance: Non-Learnable Pre-Exposure
+```{r}
+m <- lm(c~1,data=subset(subj_testType,exp=="exp1"&testType=="novelX"&conditionC==-0.5))
+summary(m)
+
+```
+
+##### Interaction between Novel X and Familiar X trials
+
+```{r}
+m <- lm(c~conditionC*testTypeC,data=subset(subj_testType,exp=="exp1"))
+summary(m)
 ```
 
 ## Experiment 2
 
-###Test Accuracy {.tabset}
+### Test Accuracy {.tabset}
 
-####Plot
+#### Plot
 
 ```{r}
-#Recognition Test
-p1 <- ggplot(subset(test_type_exp,testType=="recognition"&exp=="exp2"),aes(condition,acc,fill=condition, color=condition))+
+#Familiar X Test
+p1 <- ggplot(subset(test_type_exp,testType=="familiarX"&exp=="exp2"),aes(condition,accuracy,fill=condition, color=condition))+
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
-  geom_jitter(data=subset(subj_testType,testType=="recognition"&exp=="exp2"), width = 0.05, alpha=0.6,shape=21)+
-  geom_errorbar(aes(ymin=acc-se,ymax=acc+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
+  geom_jitter(data=subset(subj_testType,testType=="familiarX"&exp=="exp2"),aes(y=acc), width = 0.05, height=0.02, alpha=0.6,shape=21)+
+  geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
   theme_classic(base_size=12)+
   geom_hline(yintercept=0.5, linetype="dotted")+
   scale_x_discrete(name="Condition",
@@ -257,14 +664,14 @@ p1 <- ggplot(subset(test_type_exp,testType=="recognition"&exp=="exp2"),aes(condi
   scale_fill_manual(values=c("#E41A1C","#377EB8","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Learnable Pre-Exposure"))+
   scale_color_manual(values=c("#E41A1C","#377EB8","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Learnable Pre-Exposure"))+
   theme(legend.position="none")+
-  ylab("Accuracy - Recognition Test")+
+  ylab("Accuracy - Familiar X Test")+
   xlab("Condition")
 
-#Generalization Test
-p2 <- ggplot(subset(test_type_exp,testType=="generalization"&exp=="exp2"),aes(condition,acc,fill=condition, color=condition))+
+#Novel X
+p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="exp2"),aes(condition,accuracy,fill=condition, color=condition))+
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
-  geom_jitter(data=subset(subj_testType,testType=="generalization"&exp=="exp2"), width = 0.05, alpha=0.6,shape=21)+
-  geom_errorbar(aes(ymin=acc-se,ymax=acc+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
+  geom_jitter(data=subset(subj_testType,testType=="novelX"&exp=="exp2"),aes(y=acc), width = 0.05, height=0.02, alpha=0.6,shape=21)+
+  geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
   theme_classic(base_size=12)+
   geom_hline(yintercept=0.5, linetype="dotted")+
   scale_x_discrete(name="Condition",
@@ -274,79 +681,92 @@ p2 <- ggplot(subset(test_type_exp,testType=="generalization"&exp=="exp2"),aes(co
   scale_fill_manual(values=c("#E41A1C","#377EB8","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Learnable Pre-Exposure"))+
   scale_color_manual(values=c("#E41A1C","#377EB8","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Learnable Pre-Exposure"))+
   theme(legend.position="none")+
-  ylab("Accuracy - Generalization Test")+
+  ylab("Accuracy - Novel X")+
   xlab("Condition")
 plot_grid(p1,p2, labels=c("A","B"),label_size=18)
 ```
 
-####Overall Accuracy Table
+#### Overall Accuracy Table
 
 ```{r}
-formattable(subset(subset(overall_exp,exp=="exp2"),select=-c(sd,se,ci)))
+overall_exp %>%
+  filter(exp=="exp2") %>%
+  select(-c(se,accuracy_ci,d_prime_ci,c_bias_ci)) %>%
+  formattable()
 ```
 
-####Accuracy Table By Test Type
+#### Accuracy Table By Test Type
 
 ```{r}
-formattable(subset(subset(test_type_exp, exp=="exp2"),select=-c(sd,se,ci)))
+test_type_exp %>%
+  filter(exp=="exp2") %>%
+  select(-c(se,accuracy_ci,d_prime_ci,c_bias_ci)) %>%
+  formattable()
 ```
 
-####Correlation
+#### Correlation
 
-#####Correlation between recognition and generalization trials: Learnable Pre-Exposure
+##### Correlation between Familiar X and Novel X Trials: Learnable Pre-Exposure
 
 ```{r}
-##Correlations between Recognition and Generalization Test
-c <- corr.test(subset(subj_accuracy_wide, condition=="Learnable Pre-Exposure" & exp=="exp2")[,c("generalization","recognition")])
+##Correlations between Familiar X and Novel X
+c <- corr.test(subset(subj_accuracy_wide, condition=="Learnable Pre-Exposure" & exp=="exp2")[,c("novelX","familiarX")])
 c
 c$p
 ```
 
-#####Correlation between recognition and generalization trials: No Pre-Exposure
+##### Correlation between Familiar X and Novel X Trials: No Pre-Exposure
 
 ```{r}
-c <- corr.test(subset(subj_accuracy_wide, condition=="No Pre-Exposure" & exp=="exp2")[,c("generalization","recognition")])
+c <- corr.test(subset(subj_accuracy_wide, condition=="No Pre-Exposure" & exp=="exp2")[,c("novelX","familiarX")])
 c
 c$p
 ```
 
-#####Correlation between recognition and generalization trials: Non-Learnable Pre-Exposure
+##### Correlation between Familiar X and Novel X Trials: Non-Learnable Pre-Exposure
 
 ```{r}
-c <- corr.test(subset(subj_accuracy_wide, condition=="Non-Learnable Pre-Exposure" & exp=="exp2")[,c("generalization","recognition")])
+c <- corr.test(subset(subj_accuracy_wide, condition=="Non-Learnable Pre-Exposure" & exp=="exp2")[,c("novelX","familiarX")])
 c
 c$p
 ```
 
-#####Interaction
+##### Interaction
 
 ```{r}
 #interaction
 subj_accuracy_wide$conditionC <- ifelse(subj_accuracy_wide$condition=="Learnable Pre-Exposure",0.5,
                            ifelse(subj_accuracy_wide$condition=="Non-Learnable Pre-Exposure",-0.5,
                                   ifelse(subj_accuracy_wide$condition=="No Pre-Exposure",0,NA)))
-m <- lm(generalization~recognition*conditionC, subset(subj_accuracy_wide,exp=="exp2"))
+m <- lm(novelX~familiarX*conditionC, subset(subj_accuracy_wide,exp=="exp2"))
 summary(m)
 ```
 
-####Correlation Plot
+#### Correlation Plot
 
 ```{r}
-ggplot(subset(subj_accuracy_wide,exp=="exp2"),aes(recognition,generalization, color=condition,linetype=condition,shape=condition))+
+ggplot(subset(subj_accuracy_wide,exp=="exp2"),aes(familiarX,novelX, color=condition,linetype=condition,shape=condition))+
   geom_jitter(width=0.02,height=0.02,size=3)+
   geom_smooth(method=lm,se =F,size=1.5)+
   scale_color_manual(name="Condition",values=c("#4DAF4A","#377EB8","#E41A1C"))+
   scale_linetype_manual(name="Condition",values=c(1,4,2))+
   scale_shape_manual(name="Condition",values=c(16,15,17))+
-  ylab("Accuracy - Generalization")+
-  xlab("Accuracy - Recognition")+
+  ylab("Accuracy - novelX")+
+  xlab("Accuracy - Familiar X")+
   theme_classic(base_size=18)+
   theme(legend.position=c(0.3,0.9))
 ```
 
-###Model {.tabset}
+### Logistic Mixed-Effects Model {.tabset}
 
-#### Overall
+#### Overall {.tabset}
+
+##### Final Converging Models
+
+The final models with the maximal random effects structure that still allowed the model to converge, as reported in the manuscript.
+
+Richter single-contrast approach.
+
 ```{r}
 #recode condition
 d$conditionC <- ifelse(d$condition=="Learnable Pre-Exposure",0.5,
@@ -357,150 +777,1045 @@ d$conditionOrthContrast2 <- ifelse(d$condition=="Learnable Pre-Exposure",-1/3,
                                        ifelse(d$condition=="No Pre-Exposure",2/3,NA)))
 
 #overall analysis (Richter single-contrast apporach)
-m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp2"),family=binomial,glmerControl(optimizer="bobyqa"))
+m <- glmer(isRight~conditionC+(1|participantCode),data=subset(d,exp=="exp2"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+Abelson & Prentice approach.
+
+```{r}
+##check same analysis with Abelson & Prentice approach
+m <- glmer(isRight~conditionC+conditionOrthContrast2+(1|participantCode),data=subset(d,exp=="exp2"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+
+##### Maximal Random Effects Model
+
+Note that these model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+Richter single-contrast approach.
+
+```{r}
+#overall analysis (Richter single-contrast apporach)
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp2"),family=binomial,glmerControl(optimizer="bobyqa")) #convergence warning
 summary(m)
 confint(m, method="Wald")[5:6,]
+```
+Abelson & Prentice approach.
+
+```{r}
 
 ##check same analysis with Abelson & Prentice approach
-#m=glmer(isRight~conditionC+conditionOrthContrast2+(1|participantCode)+(1+conditionC+conditionOrthContrast2|stimulus),data=subset(d,exp=="exp2"),family=binomial,glmerControl(optimizer="bobyqa")) #convergence warning
-m <- glmer(isRight~conditionC+conditionOrthContrast2+(1|participantCode)+(0+conditionC+conditionOrthContrast2|stimulus),data=subset(d,exp=="exp2"),family=binomial,glmerControl(optimizer="bobyqa"))
+m=glmer(isRight~conditionC+conditionOrthContrast2+(1|participantCode)+(1+conditionC+conditionOrthContrast2|stimulus),data=subset(d,exp=="exp2"),family=binomial,glmerControl(optimizer="bobyqa")) #convergence warning
 summary(m)
-```
-
-#####Testing against chance: Learnable Pre-Exposure
-
-```{r}
-#Learnable
-m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&conditionC==0.5),family=binomial,glmerControl(optimizer="bobyqa"))
-summary(m)
-confint(m, method="Wald")[3,]
-```
-
-#####Testing against chance: No Pre-Exposure
-
-```{r}
-m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&conditionC==0),family=binomial,glmerControl(optimizer="bobyqa"))
-summary(m)
-confint(m, method="Wald")[3,]
-```
-
-#####Testing against chance: Non-Learnable Pre-Exposure
-
-```{r}
-m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&conditionC==-0.5),family=binomial,glmerControl(optimizer="bobyqa"))
-summary(m)
-confint(m, method="Wald")[3,]
+confint(m, method="Wald")[8:10,]
 ```
 
 #### Pairwise condition comparisons
 
+##### Learnable vs. Non-Learnable Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
 ```{r}
-#compare conditions
+m <- glmer(isRight~conditionC+(1|participantCode),data=subset(d,exp=="exp2"&conditionC!=0),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[2:3,]
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
 #Learnable vs. Non-Learnable
 m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp2"&conditionC!=0),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
 confint(m, method="Wald")[5:6,]
+```
 
+##### No Pre-Exposure vs. Non-Learnable Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
 #Non-Learnable vs. No Pre-Exposure
 d$conditionNonLearnableNoPreExp <- ifelse(d$conditionC==0.5,1.5,
                                     ifelse(d$conditionC==0,0.5,d$conditionC))
-m <- glmer(isRight~conditionNonLearnableNoPreExp+(1+conditionNonLearnableNoPreExp|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&conditionNonLearnableNoPreExp!=1.5),family=binomial,glmerControl(optimizer="bobyqa"))
+m <- glmer(isRight~conditionNonLearnableNoPreExp+(1|participantCode),data=subset(d,exp=="exp2"&conditionNonLearnableNoPreExp!=1.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[2:3,]
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~conditionNonLearnableNoPreExp+(1|participantCode)+(1+conditionNonLearnableNoPreExp|stimulus),data=subset(d,exp=="exp2"&conditionNonLearnableNoPreExp!=1.5),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
 confint(m, method="Wald")[5:6,]
+```
 
-#No Pre-Exposure vs. Learnable
+##### Learnable vs. No Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+#Learnable vs. No Pre-Exposure
 d$conditionLearnableNoPreExp <- ifelse(d$conditionC==-0.5,-1.5,
                                     ifelse(d$conditionC==0,-0.5,d$conditionC))
+m <- glmer(isRight~conditionLearnableNoPreExp+(1|participantCode)+(0+conditionLearnableNoPreExp|stimulus),data=subset(d,exp=="exp2"&conditionLearnableNoPreExp!=-1.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[3:4,]
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+#Learnable vs. No Pre-Exposure
 m <- glmer(isRight~conditionLearnableNoPreExp+(1|participantCode)+(1+conditionLearnableNoPreExp|stimulus),data=subset(d,exp=="exp2"&conditionLearnableNoPreExp!=-1.5),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
 confint(m, method="Wald")[5:6,]
 ```
 
-#### Recognition Trials
+##### Testing against chance: Learnable Pre-Exposure {.tabset}
 
-#####Condition Effect
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
 
 ```{r}
-#recognition test
-m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp2"&testType=="recognition"),family=binomial,glmerControl(optimizer="bobyqa"))
+#Learnable
+m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&conditionC==0.5),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
 confint(m, method="Wald")
-
-##check same analysis with Abelson & Prentice approach
-m <- glmer(isRight~conditionC+conditionOrthContrast2+(1|participantCode)+(0+conditionC+conditionOrthContrast2|stimulus),data=subset(d,exp=="exp2"&testType=="recognition"),family=binomial,glmerControl(optimizer="bobyqa"))
-summary(m)
 ```
 
-#####Testing against chance: Learnable Pre-Exposure
-```{r}
-m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp1"&testType=="recognition"&condition=="Learnable Pre-Exposure"),family=binomial,glmerControl(optimizer="bobyqa"))
-summary(m)
-confint(m, method="Wald")[3,]
-```
+##### Testing against chance: No Pre-Exposure {.tabset}
 
-#####Testing against chance: No Pre-Exposure
-```{r}
-m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&testType=="recognition"&condition=="No Pre-Exposure"),family=binomial,glmerControl(optimizer="bobyqa"))
-summary(m)
-confint(m, method="Wald")[3,]
-```
+###### Final Converging Model
 
-#####Testing against chance: Non-Learnable Pre-Exposure
-```{r}
-m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&testType=="recognition"&condition=="Non-Learnable Pre-Exposure"),family=binomial,glmerControl(optimizer="bobyqa"))
-summary(m)
-confint(m, method="Wald")[3,]
-```
-
-####Generalization Test Trials
-
-#####Condition Effect
+The final model with the maximal random effects structure that still allowed the model to converge.
 
 ```{r}
-#generalization test
-m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp2"&testType=="generalization"),family=binomial,glmerControl(optimizer="bobyqa"))
+#No Pre-Exposure
+m <- glmer(isRight~1+(1|participantCode),data=subset(d,exp=="exp2"&conditionC==0),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
 confint(m, method="Wald")
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+#No Pre-Exposure
+m <- glmer(isRight~1+(1|participantCode),data=subset(d,exp=="exp2"&conditionC==0),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+##### Testing against chance: Non-Learnable Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+#Non-Learnable
+m <- glmer(isRight~1+(1|participantCode),data=subset(d,exp=="exp2"&conditionC==-0.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+#No Pre-Exposure
+m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&conditionC==0),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+#### Familiar X Trials
+
+##### Condition Effect {.tabset}
+
+###### Final Converging Model
+
+The final model swith the maximal random effects structure that still allowed the models to converge.
+
+Richter single-contrast approach.
+
+```{r}
+#Familiar X test
+m <- glmer(isRight~conditionC+(1|participantCode),data=subset(d,exp=="exp2"&testType=="familiarX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+Abelson & Prentice approach.
+
+```{r}
+##check same analysis with Abelson & Prentice approach
+m <- glmer(isRight~conditionC+conditionOrthContrast2+(1|participantCode),data=subset(d,exp=="exp2"&testType=="familiarX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+```
+
+###### Maximal Random Effects Model
+
+Note that these models do not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+Richter single-contrast approach.
+
+```{r}
+#Familiar X test
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp2"&testType=="familiarX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+Abelson & Prentice approach.
+
+```{r}
+##check same analysis with Abelson & Prentice approach
+m <- glmer(isRight~conditionC+conditionOrthContrast2+(1|participantCode)+(1+conditionC+conditionOrthContrast2|stimulus),data=subset(d,exp=="exp2"&testType=="familiarX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+```
+
+##### Pairwise condition comparisons: Learnable vs. Non-Learnable Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode),data=subset(d,exp=="exp2"&testType=="familiarX"&conditionC!=0),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[2:3,]
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+#Learnable vs. Non-Learnable
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp2"&testType=="familiarX"&conditionC!=0),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[5:6,]
+```
+
+##### Pairwise condition comparisons: No Pre-Exposure vs. Non-Learnable Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+#Non-Learnable vs. No Pre-Exposure
+d$conditionNonLearnableNoPreExp <- ifelse(d$conditionC==0.5,1.5,
+                                    ifelse(d$conditionC==0,0.5,d$conditionC))
+m <- glmer(isRight~conditionNonLearnableNoPreExp+(1|participantCode),data=subset(d,exp=="exp2"&testType=="familiarX"&conditionNonLearnableNoPreExp!=1.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[2:3,]
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~conditionNonLearnableNoPreExp+(1|participantCode)+(1+conditionNonLearnableNoPreExp|stimulus),data=subset(d,exp=="exp2"&testType=="familiarX"&conditionNonLearnableNoPreExp!=1.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[5:6,]
+```
+
+##### Learnable vs. No Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+#Learnable vs. No Pre-Exposure
+d$conditionLearnableNoPreExp <- ifelse(d$conditionC==-0.5,-1.5,
+                                    ifelse(d$conditionC==0,-0.5,d$conditionC))
+m <- glmer(isRight~conditionLearnableNoPreExp+(1|participantCode)+(0+conditionLearnableNoPreExp|stimulus),data=subset(d,exp=="exp2"&testType=="familiarX"&conditionLearnableNoPreExp!=-1.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[3:4,]
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+#Learnable vs. No Pre-Exposure
+m <- glmer(isRight~conditionLearnableNoPreExp+(1|participantCode)+(1+conditionLearnableNoPreExp|stimulus),data=subset(d,exp=="exp2"&testType=="familiarX"&conditionLearnableNoPreExp!=-1.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[5:6,]
+```
+
+##### Testing against chance: Learnable Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&testType=="familiarX"&condition=="Learnable Pre-Exposure"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[2,]
+```
+
+##### Testing against chance: No Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode),data=subset(d,exp=="exp2"&testType=="familiarX"&condition=="No Pre-Exposure"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[2,]
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&testType=="familiarX"&condition=="No Pre-Exposure"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[3,]
+```
+
+##### Testing against chance: Non-Learnable Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glm(isRight~1,data=subset(d,exp=="exp2"&testType=="familiarX"&condition=="Non-Learnable Pre-Exposure"),family=binomial)
+summary(m)
+confint(m, method="Wald")
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&testType=="familiarX"&condition=="Non-Learnable Pre-Exposure"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[3,]
+```
+
+#### Novel X Trials
+
+##### Condition Effect {.tabset}
+
+###### Final Converging Model
+
+The final model swith the maximal random effects structure that still allowed the models to converge.
+
+Richter single-contrast approach.
+
+```{r}
+#novel X test
+m <- glmer(isRight~conditionC+(1|participantCode),data=subset(d,exp=="exp2"&testType=="novelX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+Abelson & Prentice approach.
+
+```{r}
+##check same analysis with Abelson & Prentice approach
+m <- glmer(isRight~conditionC+conditionOrthContrast2+(1|participantCode),data=subset(d,exp=="exp2"&testType=="novelX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+```
+
+###### Maximal Random Effects Model
+
+Note that these models do not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+Richter single-contrast approach.
+
+```{r}
+#novel X test
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp2"&testType=="novelX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+Abelson & Prentice approach.
+
+```{r}
+##check same analysis with Abelson & Prentice approach
+m <- glmer(isRight~conditionC+conditionOrthContrast2+(1|participantCode)+(1+conditionC+conditionOrthContrast2|stimulus),data=subset(d,exp=="exp2"&testType=="novelX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+```
+
+##### Pairwise condition comparisons: Learnable vs. Non-Learnable Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode),data=subset(d,exp=="exp2"&testType=="novelX"&conditionC!=0),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[2:3,]
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+#Learnable vs. Non-Learnable
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp2"&testType=="novelX"&conditionC!=0),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[5:6,]
+```
+
+##### Pairwise condition comparisons: No Pre-Exposure vs. Non-Learnable Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+#Non-Learnable vs. No Pre-Exposure
+d$conditionNonLearnableNoPreExp <- ifelse(d$conditionC==0.5,1.5,
+                                    ifelse(d$conditionC==0,0.5,d$conditionC))
+m <- glmer(isRight~conditionNonLearnableNoPreExp+(1|participantCode),data=subset(d,exp=="exp2"&testType=="novelX"&conditionNonLearnableNoPreExp!=1.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[2:3,]
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~conditionNonLearnableNoPreExp+(1|participantCode)+(1+conditionNonLearnableNoPreExp|stimulus),data=subset(d,exp=="exp2"&testType=="novelX"&conditionNonLearnableNoPreExp!=1.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[5:6,]
+```
+
+##### Learnable vs. No Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+#Learnable vs. No Pre-Exposure
+d$conditionLearnableNoPreExp <- ifelse(d$conditionC==-0.5,-1.5,
+                                    ifelse(d$conditionC==0,-0.5,d$conditionC))
+m <- glmer(isRight~conditionLearnableNoPreExp+(1|participantCode),data=subset(d,exp=="exp2"&testType=="novelX"&conditionLearnableNoPreExp!=-1.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+#Learnable vs. No Pre-Exposure
+m <- glmer(isRight~conditionLearnableNoPreExp+(1|participantCode)+(1+conditionLearnableNoPreExp|stimulus),data=subset(d,exp=="exp2"&testType=="novelX"&conditionLearnableNoPreExp!=-1.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[5:6,]
+```
+
+##### Testing against chance: Learnable Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&testType=="novelX"&condition=="Learnable Pre-Exposure"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[2,]
+```
+
+##### Testing against chance: No Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode),data=subset(d,exp=="exp2"&testType=="novelX"&condition=="No Pre-Exposure"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[2,]
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&testType=="novelX"&condition=="No Pre-Exposure"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[3,]
+```
+
+##### Testing against chance: Non-Learnable Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode),data=subset(d,exp=="exp2"&testType=="novelX"&condition=="Non-Learnable Pre-Exposure"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&testType=="novelX"&condition=="Non-Learnable Pre-Exposure"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[3,]
+```
+
+#### Interaction between test type and condition {.tabset}
+
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+#recode test type
+d$testTypeC <- ifelse(d$testType=="novelX",0.5,
+                    ifelse(d$testType=="familiarX",-0.5,NA))
+##all data
+m <- glmer(isRight~conditionC*testTypeC+(1|participantCode),data=subset(d,exp=="exp2"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+##all data
+m <- glmer(isRight~conditionC*testTypeC+(1+testTypeC|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp1"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[7:10,]
+```
+
+### Signal Detection Analysis 
+
+#### Sensitivity {.tabset}
+
+##### Overall
+
+Richter single-contrast approach.
+
+```{r}
+#recode condition
+subj_overall$conditionC <- ifelse(subj_overall$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(subj_overall$condition=="Non-Learnable Pre-Exposure",-0.5,
+                           ifelse(subj_overall$condition=="No Pre-Exposure",0,NA)))
+subj_overall$conditionOrthContrast2 <- ifelse(subj_overall$condition=="Learnable Pre-Exposure",-1/3,
+                                ifelse(subj_overall$condition=="Non-Learnable Pre-Exposure",-1/3,
+                                       ifelse(subj_overall$condition=="No Pre-Exposure",2/3,NA)))
+
+#overall analysis (Richter single-contrast apporach)
+m <- lm(dprime~conditionC,data=subset(subj_overall,exp=="exp2"))
+summary(m)
+```
+
+Abelson & Prentice approach.
+
+```{r}
+##check same analysis with Abelson & Prentice approach
+m <- lm(dprime~conditionC+conditionOrthContrast2,data=subset(subj_overall,exp=="exp2"))
+summary(m)
+```
+
+##### Pairwise condition comparisons
+
+Pairwise comparison between conditions.
+
+*Learnable Pre-Exposure vs. Non-Learnable Pre-Exposure Condition*
+
+```{r}
+#compare conditions
+#Learnable vs. Non-Learnable
+m <- lm(dprime~conditionC,data=subset(subj_overall,exp=="exp2"&conditionC!=0))
+summary(m)
+```
+
+*No Pre-Exposure vs. Non-Learnable Pre-Exposure Condition*
+
+```{r}
+#Non-Learnable vs. No Pre-Exposure
+subj_overall$conditionNonLearnableNoPreExp <- ifelse(subj_overall$conditionC==0.5,1.5,
+                                    ifelse(subj_overall$conditionC==0,0.5,subj_overall$conditionC))
+
+m <- lm(dprime~conditionNonLearnableNoPreExp,data=subset(subj_overall,exp=="exp2"&conditionNonLearnableNoPreExp!=1.5))
+summary(m)
+```
+
+*Learnable Pre-Exposure vs. No Pre-Exposure Condition*
+
+```{r}
+#No Pre-Exposure vs. Learnable
+subj_overall$conditionLearnableNoPreExp <- ifelse(subj_overall$conditionC==-0.5,-1.5,
+                                    ifelse(subj_overall$conditionC==0,-0.5,subj_overall$conditionC))
+m <- lm(dprime~conditionLearnableNoPreExp,data=subset(subj_overall,exp=="exp2"&conditionLearnableNoPreExp!=-1.5))
+summary(m)
+
+```
+
+*Testing against chance: Learnable Pre-Exposure*
+
+```{r}
+#Learnable
+m <- lm(dprime~1,data=subset(subj_overall,exp=="exp2"&conditionC==0.5))
+summary(m)
+
+```
+
+*Testing against chance: No Pre-Exposure*
+
+```{r}
+m <- lm(dprime~1,data=subset(subj_overall,exp=="exp2"&conditionC==0))
+summary(m)
+
+```
+
+*Testing against chance: Non-Learnable Pre-Exposure*
+
+```{r}
+m <- lm(dprime~1,data=subset(subj_overall,exp=="exp2"&conditionC==-0.5))
+summary(m)
+
+```
+
+##### Familiar X Trials
+
+*Condition Effect*
+
+```{r}
+subj_testType$conditionC <- ifelse(subj_testType$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(subj_testType$condition=="Non-Learnable Pre-Exposure",-0.5,
+                           ifelse(subj_testType$condition=="No Pre-Exposure",0,NA)))
+subj_testType$conditionOrthContrast2 <- ifelse(subj_testType$condition=="Learnable Pre-Exposure",-1/3,
+                                ifelse(subj_testType$condition=="Non-Learnable Pre-Exposure",-1/3,
+                                       ifelse(subj_testType$condition=="No Pre-Exposure",2/3,NA)))
+
+
+#Familiar X test
+#overall analysis (Richter single-contrast apporach)
+m <- lm(dprime~conditionC,data=subset(subj_testType,exp=="exp2"&testType=="familiarX"))
+summary(m)
+
 
 ##check same analysis with Abelson & Prentice approach
-m <- glmer(isRight~conditionC+conditionOrthContrast2+(1|participantCode)+(0+conditionC+conditionOrthContrast2|stimulus),data=subset(d,exp=="exp2"&testType=="generalization"),family=binomial,glmerControl(optimizer="bobyqa"))
+m <- lm(dprime~conditionC+conditionOrthContrast2,data=subset(subj_testType,exp=="exp2"&testType=="familiarX"))
 summary(m)
+
 ```
 
-#####Testing against chance: Learnable Pre-Exposure
+*Pairwise comparisons: Learnable Pre-Exposure vs. Non-Learnable Pre-Exposure Condition*
+
 ```{r}
-m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp1"&testType=="generalization"&condition=="Learnable Pre-Exposure"),family=binomial,glmerControl(optimizer="bobyqa"))
+#compare conditions
+#Learnable vs. Non-Learnable
+m <- lm(dprime~conditionC,data=subset(subj_testType,exp=="exp2"&testType=="familiarX"&conditionC!=0))
 summary(m)
-confint(m, method="Wald")[3,]
 ```
 
-#####Testing against chance: No Pre-Exposure
+*No Pre-Exposure vs. Non-Learnable Pre-Exposure Condition*
+
 ```{r}
-m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&testType=="generalization"&condition=="No Pre-Exposure"),family=binomial,glmerControl(optimizer="bobyqa"))
+#Non-Learnable vs. No Pre-Exposure
+subj_testType$conditionNonLearnableNoPreExp <- ifelse(subj_testType$conditionC==0.5,1.5,
+                                    ifelse(subj_testType$conditionC==0,0.5,subj_testType$conditionC))
+
+m <- lm(dprime~conditionNonLearnableNoPreExp,data=subset(subj_testType,exp=="exp2"&testType=="familiarX"&conditionNonLearnableNoPreExp!=1.5))
 summary(m)
-confint(m, method="Wald")[3,]
 ```
 
-#####Testing against chance: Non-Learnable Pre-Exposure
+*Learnable Pre-Exposure vs. No Pre-Exposure Condition*
+
 ```{r}
-m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&testType=="generalization"&condition=="Non-Learnable Pre-Exposure"),family=binomial,glmerControl(optimizer="bobyqa"))
+#No Pre-Exposure vs. Learnable
+subj_testType$conditionLearnableNoPreExp <- ifelse(subj_testType$conditionC==-0.5,-1.5,
+                                    ifelse(subj_testType$conditionC==0,-0.5,subj_testType$conditionC))
+m <- lm(dprime~conditionLearnableNoPreExp,data=subset(subj_testType,exp=="exp2"&testType=="familiarX"&conditionLearnableNoPreExp!=-1.5))
 summary(m)
-confint(m, method="Wald")[3,]
+
 ```
 
+*Testing against chance: Learnable Pre-Exposure*
+```{r}
+m <- lm(dprime~1,data=subset(subj_testType,exp=="exp2"&testType=="familiarX"&conditionC==0.5))
+summary(m)
+
+```
+
+*Testing against chance: No Pre-Exposure*
+```{r}
+m <- lm(dprime~1,data=subset(subj_testType,exp=="exp2"&testType=="familiarX"&conditionC==0))
+summary(m)
+
+```
+
+*Testing against chance: Non-Learnable Pre-Exposure*
+```{r}
+m <- lm(dprime~1,data=subset(subj_testType,exp=="exp2"&testType=="familiarX"&conditionC==-0.5))
+summary(m)
+
+```
+
+##### Novel X Trials
+
+*Condition Effect*
+
+```{r}
+subj_testType$conditionC <- ifelse(subj_testType$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(subj_testType$condition=="Non-Learnable Pre-Exposure",-0.5,
+                           ifelse(subj_testType$condition=="No Pre-Exposure",0,NA)))
+subj_testType$conditionOrthContrast2 <- ifelse(subj_testType$condition=="Learnable Pre-Exposure",-1/3,
+                                ifelse(subj_testType$condition=="Non-Learnable Pre-Exposure",-1/3,
+                                       ifelse(subj_testType$condition=="No Pre-Exposure",2/3,NA)))
+
+
+#Familiar X test
+#overall analysis (Richter single-contrast apporach)
+m <- lm(dprime~conditionC,data=subset(subj_testType,exp=="exp2"&testType=="novelX"))
+summary(m)
+
+
+##check same analysis with Abelson & Prentice approach
+m <- lm(dprime~conditionC+conditionOrthContrast2,data=subset(subj_testType,exp=="exp2"&testType=="novelX"))
+summary(m)
+
+```
+
+*Pairwise comparisons: Learnable Pre-Exposure vs. Non-Learnable Pre-Exposure Condition*
+
+```{r}
+#compare conditions
+#Learnable vs. Non-Learnable
+m <- lm(dprime~conditionC,data=subset(subj_testType,exp=="exp2"&testType=="novelX"&conditionC!=0))
+summary(m)
+```
+
+*No Pre-Exposure vs. Non-Learnable Pre-Exposure Condition*
+
+```{r}
+#Non-Learnable vs. No Pre-Exposure
+subj_testType$conditionNonLearnableNoPreExp <- ifelse(subj_testType$conditionC==0.5,1.5,
+                                    ifelse(subj_testType$conditionC==0,0.5,subj_testType$conditionC))
+
+m <- lm(dprime~conditionNonLearnableNoPreExp,data=subset(subj_testType,exp=="exp2"&testType=="novelX"&conditionNonLearnableNoPreExp!=1.5))
+summary(m)
+```
+
+*Learnable Pre-Exposure vs. No Pre-Exposure Condition*
+
+```{r}
+#No Pre-Exposure vs. Learnable
+subj_testType$conditionLearnableNoPreExp <- ifelse(subj_testType$conditionC==-0.5,-1.5,
+                                    ifelse(subj_testType$conditionC==0,-0.5,subj_testType$conditionC))
+m <- lm(dprime~conditionLearnableNoPreExp,data=subset(subj_testType,exp=="exp2"&testType=="novelX"&conditionLearnableNoPreExp!=-1.5))
+summary(m)
+
+```
+
+*Testing against chance: Learnable Pre-Exposure*
+```{r}
+m <- lm(dprime~1,data=subset(subj_testType,exp=="exp2"&testType=="novelX"&conditionC==0.5))
+summary(m)
+
+```
+
+*Testing against chance: No Pre-Exposure*
+```{r}
+m <- lm(dprime~1,data=subset(subj_testType,exp=="exp2"&testType=="novelX"&conditionC==0))
+summary(m)
+
+```
+
+*Testing against chance: Non-Learnable Pre-Exposure*
+```{r}
+m <- lm(dprime~1,data=subset(subj_testType,exp=="exp2"&testType=="novelX"&conditionC==-0.5))
+summary(m)
+
+```
+
+##### Interaction between Novel X and Familiar X trials
+
+```{r}
+#recode test type
+subj_testType$testTypeC <- ifelse(subj_testType$testType=="novelX",0.5,
+                    ifelse(subj_testType$testType=="familiarX",-0.5,NA))
+m <- lm(dprime~conditionC*testTypeC,data=subset(subj_testType,exp=="exp2"))
+summary(m)
+```
+
+#### Response Bias {.tabset}
+
+##### Overall
+
+Unlike with the sensitivty/ accuracy measures, we had no specific hypothesis (linear or otherwise) with respect to response bias. Hence, we test for an overall effect of condition (multi-df, omnibus effect) with condition dummy-coded.
+
+```{r}
+subj_testType$conditionC <- ifelse(subj_testType$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(subj_testType$condition=="Non-Learnable Pre-Exposure",-0.5,
+                           ifelse(subj_testType$condition=="No Pre-Exposure",0,NA)))
+
+#overall analysis (condition dummy-coded)
+m <- lm(c~condition,data=subset(subj_overall,exp=="exp2"))
+summary(m)
+Anova(m, type="III")
+```
+
+There is no significant overall effect of condition on response bias _c_ - indicating that response bias does not differ overall across conditions.
+
+##### Pairwise condition comparisons
+
+Pairwise comparison between conditions.
+
+*Learnable Pre-Exposure vs. Non-Learnable Pre-Exposure Condition*
+
+```{r}
+#compare conditions
+#Learnable vs. Non-Learnable
+m <- lm(c~conditionC,data=subset(subj_overall,exp=="exp2"&conditionC!=0))
+summary(m)
+```
+
+*No Pre-Exposure vs. Non-Learnable Pre-Exposure Condition*
+
+```{r}
+#Non-Learnable vs. No Pre-Exposure
+subj_overall$conditionNonLearnableNoPreExp <- ifelse(subj_overall$conditionC==0.5,1.5,
+                                    ifelse(subj_overall$conditionC==0,0.5,subj_overall$conditionC))
+
+m <- lm(c~conditionNonLearnableNoPreExp,data=subset(subj_overall,exp=="exp2"&conditionNonLearnableNoPreExp!=1.5))
+summary(m)
+```
+
+*Learnable Pre-Exposure vs. No Pre-Exposure Condition*
+
+```{r}
+#No Pre-Exposure vs. Learnable
+subj_overall$conditionLearnableNoPreExp <- ifelse(subj_overall$conditionC==-0.5,-1.5,
+                                    ifelse(subj_overall$conditionC==0,-0.5,subj_overall$conditionC))
+m <- lm(c~conditionLearnableNoPreExp,data=subset(subj_overall,exp=="exp2"&conditionLearnableNoPreExp!=-1.5))
+summary(m)
+
+```
+
+*Testing against chance: Learnable Pre-Exposure*
+
+```{r}
+#Learnable
+m <- lm(c~1,data=subset(subj_overall,exp=="exp2"&conditionC==0.5))
+summary(m)
+
+```
+
+*Testing against chance: No Pre-Exposure*
+
+```{r}
+m <- lm(c~1,data=subset(subj_overall,exp=="exp2"&conditionC==0))
+summary(m)
+
+```
+
+*Testing against chance: Non-Learnable Pre-Exposure*
+
+```{r}
+m <- lm(c~1,data=subset(subj_overall,exp=="exp2"&conditionC==-0.5))
+summary(m)
+
+```
+
+##### Familiar X Trials
+
+*Condition Effect*
+
+```{r}
+#overall analysis (condition dummy-coded)
+m <- lm(c~condition,data=subset(subj_testType,exp=="exp2"&testType=="familiarX"))
+summary(m)
+Anova(m, type="III")
+```
+
+Response bias differs across conditions.
+
+*Pairwise comparisons: Learnable Pre-Exposure vs. Non-Learnable Pre-Exposure Condition*
+
+```{r}
+#compare conditions
+#Learnable vs. Non-Learnable
+m <- lm(c~conditionC,data=subset(subj_testType,exp=="exp2"&testType=="familiarX"&conditionC!=0))
+summary(m)
+```
+
+*No Pre-Exposure vs. Non-Learnable Pre-Exposure Condition*
+
+```{r}
+#Non-Learnable vs. No Pre-Exposure
+subj_testType$conditionNonLearnableNoPreExp <- ifelse(subj_testType$conditionC==0.5,1.5,
+                                    ifelse(subj_testType$conditionC==0,0.5,subj_testType$conditionC))
+
+m <- lm(c~conditionNonLearnableNoPreExp,data=subset(subj_testType,exp=="exp2"&testType=="familiarX"&conditionNonLearnableNoPreExp!=1.5))
+summary(m)
+```
+
+*Learnable Pre-Exposure vs. No Pre-Exposure Condition*
+
+```{r}
+#No Pre-Exposure vs. Learnable
+subj_testType$conditionLearnableNoPreExp <- ifelse(subj_testType$conditionC==-0.5,-1.5,
+                                    ifelse(subj_testType$conditionC==0,-0.5,subj_testType$conditionC))
+m <- lm(c~conditionLearnableNoPreExp,data=subset(subj_testType,exp=="exp2"&testType=="familiarX"&conditionLearnableNoPreExp!=-1.5))
+summary(m)
+
+```
+
+*Testing against chance: Learnable Pre-Exposure*
+```{r}
+m <- lm(c~1,data=subset(subj_testType,exp=="exp2"&testType=="familiarX"&conditionC==0.5))
+summary(m)
+
+```
+
+*Testing against chance: No Pre-Exposure*
+```{r}
+m <- lm(c~1,data=subset(subj_testType,exp=="exp2"&testType=="familiarX"&conditionC==0))
+summary(m)
+
+```
+
+*Testing against chance: Non-Learnable Pre-Exposure*
+```{r}
+m <- lm(c~1,data=subset(subj_testType,exp=="exp2"&testType=="familiarX"&conditionC==-0.5))
+summary(m)
+
+```
+
+##### Novel X Trials
+
+*Condition Effect*
+
+```{r}
+#overall analysis (condition dummy-coded)
+m <- lm(c~condition,data=subset(subj_testType,exp=="exp2"&testType=="novelX"))
+summary(m)
+Anova(m, type="III")
+
+```
+
+*Pairwise comparisons: Learnable Pre-Exposure vs. Non-Learnable Pre-Exposure Condition*
+
+```{r}
+#compare conditions
+#Learnable vs. Non-Learnable
+m <- lm(c~conditionC,data=subset(subj_testType,exp=="exp2"&testType=="novelX"&conditionC!=0))
+summary(m)
+```
+
+*No Pre-Exposure vs. Non-Learnable Pre-Exposure Condition*
+
+```{r}
+#Non-Learnable vs. No Pre-Exposure
+subj_testType$conditionNonLearnableNoPreExp <- ifelse(subj_testType$conditionC==0.5,1.5,
+                                    ifelse(subj_testType$conditionC==0,0.5,subj_testType$conditionC))
+
+m <- lm(c~conditionNonLearnableNoPreExp,data=subset(subj_testType,exp=="exp2"&testType=="novelX"&conditionNonLearnableNoPreExp!=1.5))
+summary(m)
+```
+
+*Learnable Pre-Exposure vs. No Pre-Exposure Condition*
+
+```{r}
+#No Pre-Exposure vs. Learnable
+subj_testType$conditionLearnableNoPreExp <- ifelse(subj_testType$conditionC==-0.5,-1.5,
+                                    ifelse(subj_testType$conditionC==0,-0.5,subj_testType$conditionC))
+m <- lm(c~conditionLearnableNoPreExp,data=subset(subj_testType,exp=="exp2"&testType=="novelX"&conditionLearnableNoPreExp!=-1.5))
+summary(m)
+
+```
+
+*Testing against chance: Learnable Pre-Exposure*
+```{r}
+m <- lm(c~1,data=subset(subj_testType,exp=="exp2"&testType=="novelX"&conditionC==0.5))
+summary(m)
+
+```
+
+*Testing against chance: No Pre-Exposure*
+```{r}
+m <- lm(c~1,data=subset(subj_testType,exp=="exp2"&testType=="novelX"&conditionC==0))
+summary(m)
+
+```
+
+*Testing against chance: Non-Learnable Pre-Exposure*
+```{r}
+m <- lm(c~1,data=subset(subj_testType,exp=="exp2"&testType=="novelX"&conditionC==-0.5))
+summary(m)
+
+```
+
+##### Interaction between Novel X and Familiar X trials
+
+```{r}
+#recode test type
+subj_testType$testTypeC <- ifelse(subj_testType$testType=="novelX",0.5,
+                    ifelse(subj_testType$testType=="familiarX",-0.5,NA))
+m <- lm(c~condition*testTypeC,data=subset(subj_testType,exp=="exp2"))
+summary(m)
+Anova(m, type="III")
+```
 
 ## Experiment 3
 
-###Test Accuracy {.tabset}
+### Test Accuracy {.tabset}
 
-####Plot
+#### Plot
 
 ```{r}
-#Recognition Test
-p1 <- ggplot(subset(test_type_exp,testType=="recognition"&exp=="exp3"),aes(condition,acc,fill=condition, color=condition))+
+#Familiar X test
+p1 <- ggplot(subset(test_type_exp,testType=="familiarX"&exp=="exp3"),aes(condition,accuracy,fill=condition, color=condition))+
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
-  geom_jitter(data=subset(subj_testType,testType=="recognition"&exp=="exp3"), width = 0.05, alpha=0.6,shape=21)+
-  geom_errorbar(aes(ymin=acc-se,ymax=acc+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
+  geom_jitter(data=subset(subj_testType,testType=="familiarX"&exp=="exp3"),aes(y=acc), width = 0.05, alpha=0.6,shape=21)+
+  geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
   theme_classic(base_size=16)+
   geom_hline(yintercept=0.5, linetype="dotted")+
   scale_x_discrete(name="Condition",
@@ -510,14 +1825,14 @@ p1 <- ggplot(subset(test_type_exp,testType=="recognition"&exp=="exp3"),aes(condi
   scale_fill_manual(values=c("#4DAF4A","#54278f"))+
   scale_color_manual(values=c("#4DAF4A","#54278f"))+
   theme(legend.position="none")+
-  ylab("Accuracy - Recognition Test")+
+  ylab("Accuracy - Familiar X Test")+
   xlab("Condition")
 
-#Generalization Test
-p2 <- ggplot(subset(test_type_exp,testType=="generalization"&exp=="exp3"),aes(condition,acc,fill=condition,color=condition))+
+#Novel X
+p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="exp3"),aes(condition,accuracy,fill=condition,color=condition))+
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
-  geom_jitter(data=subset(subj_testType,testType=="generalization"&exp=="exp3"), width = 0.05, alpha=0.6,shape=21)+
-  geom_errorbar(aes(ymin=acc-se,ymax=acc+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
+  geom_jitter(data=subset(subj_testType,testType=="novelX"&exp=="exp3"),aes(y=acc), width = 0.05, alpha=0.6,shape=21)+
+  geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
   theme_classic(base_size=16)+
   geom_hline(yintercept=0.5, linetype="dotted")+
   scale_x_discrete(name="Condition",
@@ -527,125 +1842,1155 @@ p2 <- ggplot(subset(test_type_exp,testType=="generalization"&exp=="exp3"),aes(co
   scale_fill_manual(values=c("#4DAF4A","#54278f"))+
   scale_color_manual(values=c("#4DAF4A","#54278f"))+
   theme(legend.position="none")+
-  ylab("Accuracy - Generalization Test")+
+  ylab("Accuracy - Novel X Test")+
   xlab("Condition")
 plot_grid(p1,p2, labels=c("A","B"),label_size=18)
 ```
 
-####Overall Accuracy Table
+#### Overall Accuracy Table
 
 ```{r}
-formattable(subset(subset(overall_exp,exp=="exp3"),select=-c(sd,se,ci)))
+overall_exp %>%
+  filter(exp=="exp3") %>%
+  select(-c(se, accuracy_ci,d_prime_ci,c_bias_ci)) %>%
+  formattable()
 ```
 
-####Accuracy Table By Test Type
+#### Accuracy Table By Test Type
 
 ```{r}
-formattable(subset(subset(test_type_exp, exp=="exp3"),select=-c(sd,se,ci)))
+test_type_exp %>%
+  filter(exp=="exp3") %>%
+  select(-c(se, accuracy_ci,d_prime_ci,c_bias_ci)) %>%
+  formattable()
 ```
 
-####Correlation
+#### Correlation
 
-#####Correlation between recognition and generalization trials
+##### Correlation between Familiar X and Novel X Trials
 
-#####Learnable Pre-Exposure
+##### Learnable Pre-Exposure
 ```{r}
-##Correlations between Recognition and Generalization Test
-c <- corr.test(subset(subj_accuracy_wide, condition=="Learnable Pre-Exposure" & exp=="exp3")[,c("generalization","recognition")])
+##Correlations between Familiar X and Novel X
+c <- corr.test(subset(subj_accuracy_wide, condition=="Learnable Pre-Exposure" & exp=="exp3")[,c("novelX","familiarX")])
 c
 c$p
 ```
 
-#####Unstructured Pre-Exposure
+##### Unstructured Pre-Exposure
 ```{r}
-c <- corr.test(subset(subj_accuracy_wide, condition=="Unstructured Pre-Exposure" & exp=="exp3")[,c("generalization","recognition")])
+c <- corr.test(subset(subj_accuracy_wide, condition=="Unstructured Pre-Exposure" & exp=="exp3")[,c("novelX","familiarX")])
 c
 c$p
 ```
 
-#####Interaction between Test Type and Condition
+##### Interaction between Test Type and Condition
 ```{r}
-m <- lm(generalization~recognition*condition, subset(subj_accuracy_wide,exp=="exp3"))
+m <- lm(novelX~familiarX*condition, subset(subj_accuracy_wide,exp=="exp3"))
 summary(m)
 ```
 
-####Correlation Plot
+#### Correlation Plot
 
 ```{r}
-ggplot(subset(subj_accuracy_wide,exp=="exp3"),aes(recognition,generalization, color=condition,linetype=condition,shape=condition))+
+ggplot(subset(subj_accuracy_wide,exp=="exp3"),aes(familiarX,novelX, color=condition,linetype=condition,shape=condition))+
   geom_jitter(width=0.02,height=0.02,size=3)+
   geom_smooth(method=lm,se =F,size=1.5)+
   scale_color_manual(name="Condition",values=c("#4DAF4A","#54278f"))+
   scale_linetype_manual(name="Condition",values=c(1,5))+
   scale_shape_manual(name="Condition",values=c(16,18))+
-  ylab("Accuracy - Generalization")+
-  xlab("Accuracy - Recognition")+
+  ylab("Accuracy - Novel X")+
+  xlab("Accuracy - Familiar X")+
   theme_classic(base_size=18)+
   theme(legend.position=c(0.3,0.9))
 ```
 
 
-###Model {.tabset}
+### Logistic Mixed-Effects Model {.tabset}
 
-#### Overall
+#### Overall {.tabset}
+
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
 ```{r}
 #recode condition
 d$conditionC <- ifelse(d$condition=="Learnable Pre-Exposure",0.5,
                     ifelse(d$condition=="Unstructured Pre-Exposure",-0.5,NA))
 ##all data
+m <- glmer(isRight~conditionC+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp3"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+#maximal model
 m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp3"),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
 confint(m, method="Wald")[5:6,]
 ```
 
-#### Recognition Trials
+#### Familiar X Trials
 
-#####Condition Effect
+##### Condition Effect {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge, as reported in the manuscript.
 
 ```{r}
-m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp3"&testType=="recognition"),family=binomial,glmerControl(optimizer="bobyqa"))
+m <- glmer(isRight~conditionC+(1|participantCode),data=subset(d,exp=="exp3"&testType=="familiarX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution (though the parameter estimates and test statistics are highly similar to the converging model).
+
+```{r}
+#maximal model
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp3"&testType=="familiarX"),family=binomial,glmerControl(optimizer="bobyqa")) #convergence warning
 summary(m)
 confint(m, method="Wald")[5:6,]
 ```
 
-#####Testing against chance: Learnable Pre-Exposure
+##### Testing against chance: Learnable Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge, as reported in the manuscript.
 
 ```{r}
-m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp3"&testType=="recognition"&conditionC==0.5),family=binomial,glmerControl(optimizer="bobyqa"))
+m <- glmer(isRight~1+(1|participantCode),data=subset(d,exp=="exp3"&testType=="familiarX"&conditionC==0.5),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
-confint(m, method="Wald")[3,]
+confint(m, method="Wald")
 ```
 
-#####Testing against chance: Non-Learnable Pre-Exposure
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution (though the parameter estimates and test statistics are highly similar to the converging model).
 
 ```{r}
-m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp3"&testType=="recognition"&conditionC==-0.5),family=binomial,glmerControl(optimizer="bobyqa"))
+m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp3"&testType=="familiarX"&conditionC==0.5),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
-confint(m, method="Wald")[3,]
+confint(m, method="Wald")
 ```
 
-####Generalization Test Trials
+##### Testing against chance: Unstructured Pre-Exposure {.tabset}
 
-#####Condition Effect
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge, as reported in the manuscript.
 
 ```{r}
-m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp3"&testType=="generalization"),family=binomial,glmerControl(optimizer="bobyqa"))
+
+m <- glmer(isRight~1+(1|participantCode),data=subset(d,exp=="exp3"&testType=="familiarX"&conditionC==-0.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution (though the parameter estimates and test statistics are highly similar to the converging model).
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp3"&testType=="familiarX"&conditionC==-0.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+#### Novel X Trials
+
+##### Condition Effect {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge, as reported in the manuscript.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp3"&testType=="novelX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution (though the parameter estimates and test statistics are highly similar to the converging model).
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp3"&testType=="novelX"),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
 confint(m, method="Wald")[5:6,]
 ```
 
-#####Testing against chance: Learnable Pre-Exposure
+##### Testing against chance: Learnable Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge, as reported in the manuscript.
 
 ```{r}
-m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp3"&testType=="generalization"&conditionC==0.5),family=binomial,glmerControl(optimizer="bobyqa"))
+m <- glmer(isRight~1+(1|participantCode),data=subset(d,exp=="exp3"&testType=="novelX"&conditionC==0.5),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
-confint(m, method="Wald")[3,]
+confint(m, method="Wald")
 ```
 
-#####Testing against chance: Unstructured Pre-Exposure
+###### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution (though the parameter estimates and test statistics are highly similar to the converging model).
 
 ```{r}
-m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp3"&testType=="generalization"&conditionC==-0.5),family=binomial,glmerControl(optimizer="bobyqa"))
+m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp3"&testType=="novelX"&conditionC==0.5),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
-confint(m, method="Wald")[3,]
+confint(m, method="Wald")
 ```
+
+##### Testing against chance: Unstructured Pre-Exposure {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge, as reported in the manuscript.
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp3"&testType=="novelX"&conditionC==-0.5),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+#### Interaction between test type and condition {.tabset}
+
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+#recode test type
+d$testTypeC <- ifelse(d$testType=="novelX",0.5,
+                    ifelse(d$testType=="familiarX",-0.5,NA))
+##all data
+m <- glmer(isRight~conditionC*testTypeC+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp3"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[3:6,]
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+##all data
+m <- glmer(isRight~conditionC*testTypeC+(1+testTypeC|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="exp3"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[7:10,]
+```
+
+### Signal Detection Model 
+
+#### Sensitivity {.tabset}
+
+##### Overall
+```{r}
+#recode condition
+subj_overall$conditionC <- ifelse(subj_overall$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(subj_overall$condition=="Unstructured Pre-Exposure",-0.5,NA))
+##all data
+m <- lm(dprime~conditionC,data=subset(subj_overall,exp=="exp3"))
+summary(m)
+
+```
+
+##### Familiar X Trials
+
+###### Condition Effect
+
+```{r}
+#recode condition
+subj_testType$conditionC <- ifelse(subj_testType$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(subj_testType$condition=="Unstructured Pre-Exposure",-0.5,NA))
+
+m <- lm(dprime~conditionC,data=subset(subj_testType,exp=="exp3"&testType=="familiarX"))
+summary(m)
+
+```
+
+###### Testing against chance: Learnable Pre-Exposure
+```{r}
+m <- lm(dprime~1,data=subset(subj_testType,exp=="exp3"&testType=="familiarX"&conditionC==0.5))
+summary(m)
+```
+
+###### Testing against chance: Unstructured Pre-Exposure
+```{r}
+m <- lm(dprime~1,data=subset(subj_testType,exp=="exp3"&testType=="familiarX"&conditionC==-0.5))
+summary(m)
+
+```
+
+##### Novel X Trials
+
+###### Condition Effect
+
+```{r}
+m <- lm(dprime~conditionC,data=subset(subj_testType,exp=="exp3"&testType=="novelX"))
+summary(m)
+
+```
+
+###### Testing against chance: Learnable Pre-Exposure
+```{r}
+m <- lm(dprime~1,data=subset(subj_testType,exp=="exp3"&testType=="novelX"&conditionC==0.5))
+summary(m)
+
+```
+
+###### Testing against chance: Unstructured Pre-Exposure
+```{r}
+m <- lm(dprime~1,data=subset(subj_testType,exp=="exp3"&testType=="novelX"&conditionC==-0.5))
+summary(m)
+
+```
+
+##### Interaction between Novel X and Familiar X trials
+
+```{r}
+#recode test type
+subj_testType$testTypeC <- ifelse(subj_testType$testType=="novelX",0.5,
+                    ifelse(subj_testType$testType=="familiarX",-0.5,NA))
+m <- lm(dprime~conditionC*testTypeC,data=subset(subj_testType,exp=="exp3"))
+summary(m)
+```
+
+#### Response Bias {.tabset}
+
+##### Overall
+```{r}
+#recode condition
+subj_overall$conditionC <- ifelse(subj_overall$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(subj_overall$condition=="Unstructured Pre-Exposure",-0.5,NA))
+##all data
+m <- lm(c~conditionC,data=subset(subj_overall,exp=="exp3"))
+summary(m)
+
+```
+
+##### Familiar X Trials
+
+###### Condition Effect
+
+```{r}
+#recode condition
+subj_testType$conditionC <- ifelse(subj_testType$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(subj_testType$condition=="Unstructured Pre-Exposure",-0.5,NA))
+
+m <- lm(c~conditionC,data=subset(subj_testType,exp=="exp3"&testType=="familiarX"))
+summary(m)
+
+```
+
+###### Testing against chance: Learnable Pre-Exposure
+```{r}
+m <- lm(c~1,data=subset(subj_testType,exp=="exp3"&testType=="familiarX"&conditionC==0.5))
+summary(m)
+
+```
+
+###### Testing against chance: Unstructured Pre-Exposure
+```{r}
+m <- lm(c~1,data=subset(subj_testType,exp=="exp3"&testType=="familiarX"&conditionC==-0.5))
+summary(m)
+
+```
+
+##### Novel X Trials
+
+###### Condition Effect
+
+```{r}
+m <- lm(c~conditionC,data=subset(subj_testType,exp=="exp3"&testType=="novelX"))
+summary(m)
+
+```
+
+###### Testing against chance: Learnable Pre-Exposure
+```{r}
+m <- lm(c~1,data=subset(subj_testType,exp=="exp3"&testType=="novelX"&conditionC==0.5))
+summary(m)
+
+```
+
+###### Testing against chance: Unstructured Pre-Exposure
+```{r}
+m <- lm(c~1,data=subset(subj_testType,exp=="exp3"&testType=="novelX"&conditionC==-0.5))
+summary(m)
+
+```
+
+##### Interaction between Novel X and Familiar X trials
+
+```{r}
+m <- lm(c~conditionC*testTypeC,data=subset(subj_testType,exp=="exp3"))
+summary(m)
+```
+
+Much larger response bias for familiar X trials compared to novel X trials.
+
+## Overall Analysis: Experiments 1 - 3 
+
+### Plot all data from all conditions across Experiments 1 - 3 {.tabset}
+
+#### Plot
+
+```{r, warning=F}
+#Familiar X test
+p1 <- ggplot(subset(test_type,testType=="familiarX"),aes(condition,accuracy,fill=condition, color=condition))+
+  geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
+  geom_jitter(data=subset(subj_testType,testType=="familiarX"),aes(y=acc), width = 0.05, alpha=0.6,shape=21)+
+  geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, height=0.02, size=0.8)+
+  theme_classic(base_size=11)+
+  geom_hline(yintercept=0.5, linetype="dotted")+
+  scale_x_discrete(name="Condition",
+                   breaks=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Unstructured Pre-Exposure","Learnable Pre-Exposure"),
+                   labels=c("Non-Learnable\nPre-Exposure","No\n Pre-Exposure","Unstructured\nPre-Exposure","Learnable\nPre-Exposure"),
+                   limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Unstructured Pre-Exposure","Learnable Pre-Exposure"))+
+  scale_fill_manual(values=c("#E41A1C","#377EB8","#54278f","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Unstructured Pre-Exposure","Learnable Pre-Exposure"))+
+  scale_color_manual(values=c("#E41A1C","#377EB8","#54278f","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Unstructured Pre-Exposure","Learnable Pre-Exposure"))+
+  theme(legend.position="none")+
+  ylab("Accuracy - Familiar X Test")+
+  xlab("Condition")
+
+#Novel X
+p2 <- ggplot(subset(test_type,testType=="novelX"),aes(condition,accuracy,fill=condition,color=condition))+
+  geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
+  geom_jitter(data=subset(subj_testType,testType=="novelX"),aes(y=acc), width = 0.05, height=0.02, alpha=0.6,shape=21)+
+  geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
+  theme_classic(base_size=11)+
+  geom_hline(yintercept=0.5, linetype="dotted")+
+  scale_x_discrete(name="Condition",
+                   breaks=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Unstructured Pre-Exposure","Learnable Pre-Exposure"),
+                   labels=c("Non-Learnable\nPre-Exposure","No\n Pre-Exposure","Unstructured\nPre-Exposure","Learnable\nPre-Exposure"),
+                   limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Unstructured Pre-Exposure","Learnable Pre-Exposure"))+
+  scale_fill_manual(values=c("#E41A1C","#377EB8","#54278f","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Unstructured Pre-Exposure","Learnable Pre-Exposure"))+
+  scale_color_manual(values=c("#E41A1C","#377EB8","#54278f","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Unstructured Pre-Exposure","Learnable Pre-Exposure"))+
+  theme(legend.position="none")+
+  ylab("Accuracy - Novel X")+
+  xlab("Condition")
+plot_grid(p1,p2, labels=c("A","B"),label_size=18)
+```
+
+#### Overall Accuracy Table
+
+```{r}
+overall %>%
+  select(-c(se, accuracy_ci,d_prime_ci,c_bias_ci)) %>%
+  formattable()
+```
+
+#### Accuracy Table By Test Type
+
+```{r}
+test_type %>%
+  select(-c(se, accuracy_ci,d_prime_ci,c_bias_ci)) %>%
+  formattable()
+```
+
+### Overall - All pre-exposure conditions {.tabset}
+
+#### All Test Trials {.tabset}
+
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glmer(isRight~condition+(1|participantCode),data=filter(d, condition!="Learnable Pre-Exposure Only"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+Anova(m,type="III")
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+##all data
+#does not converge
+m <- glmer(isRight~condition+(1|participantCode)+(1+condition|stimulus),data=filter(d, condition!="Learnable Pre-Exposure Only"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+Anova(m,type="III")
+```
+
+#### Familiar X {.tabset}
+
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glmer(isRight~condition+(1|participantCode),data=filter(d, testType=="familiarX"&condition!="Learnable Pre-Exposure Only"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+Anova(m,type="III")
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+##all data
+#does not converge
+m <- glmer(isRight~condition+(1|participantCode)+(1+condition|stimulus),data=filter(d, testType=="familiarX"&condition!="Learnable Pre-Exposure Only"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+Anova(m,type="III")
+```
+
+#### Novel X {.tabset}
+
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glmer(isRight~condition+(1|participantCode),data=filter(d, testType=="novelX"&condition!="Learnable Pre-Exposure Only"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+Anova(m,type="III")
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+##all data
+#does not converge
+m <- glmer(isRight~condition+(1|participantCode)+(1+condition|stimulus),data=filter(d, testType=="novelX"&condition!="Learnable Pre-Exposure Only"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+Anova(m,type="III")
+```
+
+#### d-prime
+
+##### All Test Trials
+
+```{r}
+m <- lm(dprime~condition,data=filter(subj_overall, condition!="Learnable Pre-Exposure Only"))
+summary(m)
+Anova(m, type="III")
+```
+
+##### Familiar X Test Trials
+
+```{r}
+m <- lm(dprime~condition,data=filter(subj_testType, testType=="familiarX"&condition!="Learnable Pre-Exposure Only"))
+summary(m)
+Anova(m, type="III")
+```
+
+##### Novel X Test Trials
+
+```{r}
+m <- lm(dprime~condition,data=filter(subj_testType, testType=="novelX"&condition!="Learnable Pre-Exposure Only"))
+summary(m)
+Anova(m, type="III")
+```
+
+### Pairwise Comparison: Learnable Pre-Exposure vs. No Pre-Exposure {.tabset}
+
+Investigate the relationship between the Learnable Pre-Exposure condition and the No Pre-Exposure condition, using all of the data collected across Experiments 1-3.
+
+#### All Test Trials {.tabset}
+
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+#recode condition
+d$conditionC <- ifelse(d$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(d$condition=="No Pre-Exposure",-0.5,NA))
+
+m <- glmer(isRight~conditionC+(1|participantCode),data=d,family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=d,family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[5:6,]
+```
+
+#### Familiar X Trials {.tabset}
+
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode),data=subset(d,testType=="familiarX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,testType=="familiarX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[5:6,]
+```
+
+#### Novel X Trials {.tabset}
+
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode),data=subset(d,testType=="novelX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,testType=="novelX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[5:6,]
+```
+
+#### d-prime
+
+##### All Test Trials
+
+```{r}
+#recode condition
+subj_overall$conditionC <- ifelse(subj_overall$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(subj_overall$condition=="No Pre-Exposure",-0.5,NA))
+
+m <- lm(dprime~conditionC,data=subj_overall)
+summary(m)
+Anova(m, type="III")
+```
+
+##### Familiar X Test Trials
+
+```{r}
+subj_testType$conditionC <- ifelse(subj_testType$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(subj_testType$condition=="No Pre-Exposure",-0.5,NA))
+m <- lm(dprime~conditionC,data=filter(subj_testType, testType=="familiarX"))
+summary(m)
+Anova(m, type="III")
+```
+
+##### Novel X Test Trials
+
+```{r}
+m <- lm(dprime~conditionC,data=filter(subj_testType, testType=="novelX"))
+summary(m)
+Anova(m, type="III")
+```
+
+### Pairwise Comparison: Learnable Pre-Exposure vs. Non-Learnable Pre-Exposure {.tabset}
+
+Investigate the relationship between the Learnable Pre-Exposure condition and the Non-Learnable Pre-Exposure condition, using all of the data collected across Experiments 1-3.
+
+#### All Test Trials {.tabset}
+
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+#recode condition
+d$conditionC <- ifelse(d$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(d$condition=="Non-Learnable Pre-Exposure",-0.5,NA))
+
+m <- glmer(isRight~conditionC+(1|participantCode),data=d,family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=d,family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[5:6,]
+```
+
+#### Familiar X Trials {.tabset}
+
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode),data=subset(d,testType=="familiarX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,testType=="familiarX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[5:6,]
+```
+
+#### Novel X Trials {.tabset}
+
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode),data=subset(d,testType=="novelX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,testType=="novelX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[5:6,]
+```
+
+#### d-prime
+
+##### All Test Trials
+
+```{r}
+#recode condition
+subj_overall$conditionC <- ifelse(subj_overall$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(subj_overall$condition=="Non-Learnable Pre-Exposure",-0.5,NA))
+
+m <- lm(dprime~conditionC,data=subj_overall)
+summary(m)
+Anova(m, type="III")
+```
+
+##### Familiar X Test Trials
+
+```{r}
+subj_testType$conditionC <- ifelse(subj_testType$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(subj_testType$condition=="Non-Learnable Pre-Exposure",-0.5,NA))
+m <- lm(dprime~conditionC,data=filter(subj_testType, testType=="familiarX"))
+summary(m)
+Anova(m, type="III")
+```
+
+##### Novel X Test Trials
+
+```{r}
+m <- lm(dprime~conditionC,data=filter(subj_testType, testType=="novelX"))
+summary(m)
+Anova(m, type="III")
+```
+
+### Pairwise Comparison: Learnable Pre-Exposure vs. Unstructured Pre-Exposure {.tabset}
+
+Investigate the relationship between the Learnable Pre-Exposure condition and the Unstructurd Pre-Exposure condition, using all of the data collected across Experiments 1-3.
+
+#### All Test Trials {.tabset}
+
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+#recode condition
+d$conditionC <- ifelse(d$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(d$condition=="Unstructured Pre-Exposure",-0.5,NA))
+
+m <- glmer(isRight~conditionC+(1|participantCode),data=d,family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=d,family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[5:6,]
+```
+
+#### Familiar X Trials {.tabset}
+
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode),data=subset(d,testType=="familiarX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,testType=="familiarX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[5:6,]
+```
+
+#### Novel X Trials {.tabset}
+
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,testType=="novelX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+#### d-prime
+
+##### All Test Trials
+
+```{r}
+#recode condition
+subj_overall$conditionC <- ifelse(subj_overall$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(subj_overall$condition=="Unstructured Pre-Exposure",-0.5,NA))
+
+m <- lm(dprime~conditionC,data=subj_overall)
+summary(m)
+Anova(m, type="III")
+```
+
+##### Familiar X Test Trials
+
+```{r}
+subj_testType$conditionC <- ifelse(subj_testType$condition=="Learnable Pre-Exposure",0.5,
+                    ifelse(subj_testType$condition=="Unstructured Pre-Exposure",-0.5,NA))
+m <- lm(dprime~conditionC,data=filter(subj_testType, testType=="familiarX"))
+summary(m)
+Anova(m, type="III")
+```
+
+##### Novel X Test Trials
+
+```{r}
+m <- lm(dprime~conditionC,data=filter(subj_testType, testType=="novelX"))
+summary(m)
+Anova(m, type="III")
+```
+
+## S1: Learnable Pre-Exposure Only
+
+### Test Accuracy {.tabset}
+
+#### Plot
+
+```{r}
+#Familiar X test
+p1 <- ggplot(subset(test_type_exp,testType=="familiarX"&exp=="s1"),aes(condition,accuracy,fill=condition, color=condition))+
+  geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
+  geom_jitter(data=subset(subj_testType,testType=="familiarX"&exp=="s1"),aes(y=acc), width = 0.05, alpha=0.6,shape=21)+
+  geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
+  theme_classic(base_size=18)+
+  geom_hline(yintercept=0.5, linetype="dotted")+
+  scale_x_discrete(name="Condition",
+                   breaks=c("Learnable Pre-Exposure Only"),
+                   labels=c("Learnable\nPre-Exposure\nOnly"))+
+  scale_fill_manual(values=c("#265725"))+
+  scale_color_manual(values=c("#265725"))+
+  theme(legend.position="none")+
+  ylab("Accuracy - Familiar X test")+
+  xlab("Condition")
+
+#Novel X
+p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="s1"),aes(condition,accuracy,fill=condition, color=condition))+
+  geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
+  geom_jitter(data=subset(subj_testType,testType=="novelX"&exp=="s1"),aes(y=acc), width = 0.05, alpha=0.6,shape=21)+
+  geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
+  theme_classic(base_size=18)+
+  geom_hline(yintercept=0.5, linetype="dotted")+
+  scale_x_discrete(name="Condition",
+                   breaks=c("Learnable Pre-Exposure Only"),
+                   labels=c("Learnable\nPre-Exposure\nOnly"))+
+  scale_fill_manual(values=c("#265725"))+
+  scale_color_manual(values=c("#265725"))+
+  theme(legend.position="none")+
+  ylab("Accuracy - Novel X")+
+  xlab("Condition")
+plot_grid(p1,p2, labels=c("A","B"),label_size=20)
+```
+
+#### Overall Accuracy Table
+
+```{r}
+overall_exp %>%
+  filter(exp=="s1") %>%
+  #select(-c(accuracy_ci,d_prime_ci,c_bias,c_bias_ci,c_bias_lower_ci,c_bias_upper_ci)) %>%
+  formattable()
+```
+
+#### Accuracy Table By Test Type
+
+```{r}
+test_type_exp %>%
+  filter(exp=="s1") %>%
+  #select(-c(accuracy_ci,d_prime_ci,c_bias,c_bias_ci,c_bias_lower_ci,c_bias_upper_ci)) %>%
+  formattable()
+```
+
+#### Correlation
+
+##### Correlation between Familiar X and Novel X Trials
+
+```{r}
+##Correlations between Familiar X and Novel X
+c <- corr.test(subset(subj_accuracy_wide, exp=="s1")[,c("novelX","familiarX")])
+c
+c$p
+```
+
+
+#### Correlation Plot
+
+```{r}
+ggplot(subset(subj_accuracy_wide,exp=="s1"),aes(familiarX,novelX, color=condition,linetype=condition,shape=condition))+
+  geom_jitter(width=0.02,height=0.02,size=3)+
+  geom_smooth(method=lm,se =F,size=1.5)+
+  scale_color_manual(name="Condition",values=c("#265725"))+
+  scale_linetype_manual(name="Condition",values=c(1))+
+  scale_shape_manual(name="Condition",values=c(16))+
+  ylab("Accuracy - Novel X")+
+  xlab("Accuracy - Familiar X")+
+  theme_classic(base_size=18)+
+  theme(legend.position=c(0.25,0.9))
+```
+
+
+### Logistic Mixed-Effects Model {.tabset}
+
+#### Overall {.tabset}
+
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode),data=subset(d,exp=="s1"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="s1"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+#### Familiar X Trials {.tabset}
+
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode),data=subset(d,exp=="s1"&testType=="familiarX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="s1"&testType=="familiarX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+#### Novel X Trials {.tabset}
+
+##### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode),data=subset(d,exp=="s1"&testType=="novelX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="s1"&testType=="novelX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+#### Comparison to No Pre-Exposure condition from Experiment 2
+
+##### All Test Trials {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+#compare to No Pre-Exposure condition from Experiment 2
+#recode condition
+d$conditionC <- ifelse(d$condition=="Learnable Pre-Exposure Only",0.5,
+                       ifelse(d$condition=="No Pre-Exposure",-0.5,NA))
+m <- glmer(isRight~conditionC+(1|participantCode),data=subset(d,exp=="s1"|(exp=="exp2"&condition=="No Pre-Exposure")),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,exp=="s1"|(exp=="exp2"&condition=="No Pre-Exposure")),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[5:6,]
+```
+
+##### Familiar X Test Trials {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+#compare to No Pre-Exposure condition from Experiment 2
+m <- glmer(isRight~conditionC+(1|participantCode),data=subset(d,(exp=="s1"|(exp=="exp2"&condition=="No Pre-Exposure"))&testType=="familiarX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,(exp=="s1"|(exp=="exp2"&condition=="No Pre-Exposure"))&testType=="familiarX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[5:6,]
+```
+
+##### Novel X Trials {.tabset}
+
+###### Final Converging Model
+
+The final model with the maximal random effects structure that still allowed the model to converge.
+
+```{r}
+#compare to No Pre-Exposure condition from Experiment 2
+m <- glmer(isRight~conditionC+(1|participantCode),data=subset(d,(exp=="s1"|(exp=="exp2"&condition=="No Pre-Exposure"))&testType=="novelX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")
+```
+
+##### Maximal Random Effects Model
+
+Note that this model does not converge (singular fit), thus the parameter estimates should be interpreted with caution.
+
+```{r}
+m <- glmer(isRight~conditionC+(1|participantCode)+(1+conditionC|stimulus),data=subset(d,(exp=="s1"|(exp=="exp2"&condition=="No Pre-Exposure"))&testType=="novelX"),family=binomial,glmerControl(optimizer="bobyqa"))
+summary(m)
+confint(m, method="Wald")[5:6,]
+```
+
+### Signal Detection Analysis {.tabset}
+
+#### Overall
+```{r}
+##all data
+m <- lm(dprime~1,data=subset(subj_overall,exp=="s1"))
+summary(m)
+
+```
+
+#### Familiar X Trials
+
+```{r}
+m <- lm(dprime~1,data=subset(subj_testType,exp=="s1"&testType=="familiarX"))
+summary(m)
+```
+
+
+#### Novel X Trials
+
+```{r}
+m <- lm(dprime~1,data=subset(subj_testType,exp=="s1"&testType=="novelX"))
+summary(m)
+```
+
+#### Comparison to No Pre-Exposure condition from Experiment 2
+
+##### Overall
+
+```{r}
+#recode condition
+subj_overall$conditionC <- ifelse(subj_overall$condition=="Learnable Pre-Exposure Only",0.5,
+                       ifelse(subj_overall$condition=="No Pre-Exposure",-0.5,NA))
+m <- lm(dprime~conditionC,data=subset(subj_overall,exp=="s1"|(exp=="exp2"&condition=="No Pre-Exposure")))
+summary(m)
+```
+
+##### Familiar X Trials
+
+```{r}
+#recode condition
+subj_testType$conditionC <- ifelse(subj_testType$condition=="Learnable Pre-Exposure Only",0.5,
+                       ifelse(subj_testType$condition=="No Pre-Exposure",-0.5,NA))
+
+m <- lm(dprime~conditionC,data=subset(subj_testType,(exp=="s1"|(exp=="exp2"&condition=="No Pre-Exposure"))&testType=="familiarX"))
+summary(m)
+```
+
+
+##### Novel X Trials
+
+```{r}
+m <- lm(dprime~conditionC,data=subset(subj_testType,(exp=="s1"|(exp=="exp2"&condition=="No Pre-Exposure"))&testType=="novelX"))
+summary(m)
+```
+
+

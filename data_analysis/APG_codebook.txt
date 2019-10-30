@@ -5,11 +5,12 @@ ResponseId: Corresponding unique ID of participant for post-study questionnaire 
 seed: Random seed used for generating random order of test trials             
 condition: Pre-Exposure Condition (Non-Learnable Pre-Exposure, Learnable Pre-Exposure, No Pre-Exposure, Unstructured Pre-Exposure)
 preExpOrder: Which pre-exposure order participants saw (A or B)
+preExposureLang: Which pre-exposure language participants saw (1 or 2) - only for Experiment s1 (pre-exposure only condition)
 exposureLang: Which exposure language participants saw (1 or 2)
 expOrder: Which exposure language participants saw (A or B)   
 stimulus: Current test stimulus
 language: Whether the test stimulus is consistent with language 1 (L1) or language 2 (L2)
-testType: Test trial type (recognition or generalization)
+testType: Test trial type (familiarX or novelX)
 correctResponse: What the correct keyboard response (consistent - y -  or inconsistent - n - with the exposure language)   
 curTrialIndex: Test trial number (1 - 36)
 curBlockIndex: Block number (1 - 2)
