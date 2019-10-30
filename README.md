@@ -13,7 +13,6 @@ The folder data_analysis contains the following documents
 - **APG_analysis.Rmd**: An R markdown file documenting the central models reported in the manuscript
 - **APG_analysis.html**: The R markdown file exported as an html (if you only want to inspect the models and their summary outputs rather than reproduce the analyses in R)
 - **APG_codebook.txt**: A codebook for the dataset "APG_data.txt"
-- **summarizeData.R**: An R script including help functions to summarize data
 
 ## Analysis Walkthrough
 
