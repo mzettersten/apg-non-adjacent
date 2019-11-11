@@ -1334,7 +1334,7 @@ p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="exp2"),aes(condition,
   xlab("Condition")
 plot_grid(p1,p2, labels=c("A","B"),label_size=18)
 
-#experiment 3
+#Experiment 3
 #Familiar X Test
 p1 <- ggplot(subset(test_type_exp,testType=="familiarX"&exp=="exp3"),aes(condition,accuracy,fill=condition, color=condition))+
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
