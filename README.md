@@ -4,6 +4,8 @@ Stimuli, data, and analysis scripts for APG non-adjacent dependency learning stu
 Tuning in to non-adjacencies: Exposure to learnable patterns supports discovering otherwise difficult structures 
 (Zettersten, Potter, and Saffran)
 
+![Effect of Learnable Pre-Exposure on Accuracy](https://github.com/mzettersten/apg-non-adjacent/blob/master/figures/all_exps_test.pdf)
+
 ## Data & Analysis
 
 The folder data_analysis contains the following documents
@@ -23,6 +25,10 @@ https://mzettersten.github.io/apg-non-adjacent/data_analysis/APG_analysis.html
 ## Stimuli
 
 The stimuli folder contains all stimuli used across the three experiments (pre-exposure, exposure and test stimuli).
+
+## Figures
+
+The figures folder contains the main results figures reported in the manuscript.
 
 ## Questions
 
