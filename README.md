@@ -4,7 +4,7 @@ Stimuli, data, and analysis scripts for APG non-adjacent dependency learning stu
 Tuning in to non-adjacencies: Exposure to learnable patterns supports discovering otherwise difficult structures 
 (Zettersten, Potter, and Saffran)
 
-![Effect of Learnable Pre-Exposure on Accuracy](https://github.com/mzettersten/apg-non-adjacent/blob/master/figures/all_exps_test.pdf)
+![Effect of Learnable Pre-Exposure on Accuracy](https://github.com/mzettersten/apg-non-adjacent/blob/master/figures/all_exps_test.jpeg)
 
 ## Data & Analysis
 
