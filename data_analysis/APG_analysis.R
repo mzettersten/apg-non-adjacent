@@ -399,6 +399,9 @@ m <- glmer(isRight~conditionC+(1|participantCode),data=subset(d,exp=="exp2"&cond
 summary(m)
 confint(m, method="Wald")
 
+#storing p-values
+p <- c(summary(m)$coefficients[2,4])
+
 #Non-Learnable vs. No Pre-Exposure
 d$conditionNonLearnableNoPreExp <- ifelse(d$conditionC==0.5,1.5,
                                     ifelse(d$conditionC==0,0.5,d$conditionC))
@@ -409,6 +412,9 @@ m <- glmer(isRight~conditionNonLearnableNoPreExp+(1|participantCode),data=subset
 summary(m)
 confint(m, method="Wald")
 
+#storing p-values
+p <- c(p,summary(m)$coefficients[2,4])
+
 #No Pre-Exposure vs. Learnable
 d$conditionLearnableNoPreExp <- ifelse(d$conditionC==-0.5,-1.5,
                                     ifelse(d$conditionC==0,-0.5,d$conditionC))
@@ -418,6 +424,11 @@ m <- glmer(isRight~conditionLearnableNoPreExp+(1|participantCode)+(1+conditionLe
 m <- glmer(isRight~conditionLearnableNoPreExp+(1|participantCode)+(0+conditionLearnableNoPreExp|stimulus),data=subset(d,exp=="exp2"&conditionLearnableNoPreExp!=-1.5),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
 confint(m, method="Wald")
+
+#storing p-values
+p <- c(p,summary(m)$coefficients[2,4])
+#if using Holm-Bonferroni correction:
+p.adjust(p)
 
 #Compare each condition to chance performance (collapsing across test trials)
 #Learnable
@@ -468,6 +479,9 @@ m <- glmer(isRight~conditionC+(1|participantCode),data=subset(d,exp=="exp2"&test
 summary(m)
 confint(m, method="Wald")[2:3,]
 
+#storing p-values
+p <- c(summary(m)$coefficients[2,4])
+
 #No Pre-Exposure vs. Non-Learnable Pre-Exposure
 d$conditionNonLearnableNoPreExp <- ifelse(d$conditionC==0.5,1.5,
                                           ifelse(d$conditionC==0,0.5,d$conditionC))
@@ -478,6 +492,9 @@ m <- glmer(isRight~conditionNonLearnableNoPreExp+(1|participantCode),data=subset
 summary(m)
 confint(m, method="Wald")[2:3,]
 
+#storing p-values
+p <- c(p,summary(m)$coefficients[2,4])
+
 #Learnable vs. No Pre-Exposure
 d$conditionLearnableNoPreExp <- ifelse(d$conditionC==-0.5,-1.5,
                                        ifelse(d$conditionC==0,-0.5,d$conditionC))
@@ -487,6 +504,11 @@ m <- glmer(isRight~conditionLearnableNoPreExp+(1|participantCode)+(1+conditionLe
 m <- glmer(isRight~conditionLearnableNoPreExp+(1|participantCode)+(0+conditionLearnableNoPreExp|stimulus),data=subset(d,exp=="exp2"&testType=="familiarX"&conditionLearnableNoPreExp!=-1.5),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
 confint(m, method="Wald")[3:4,]
+
+#storing p-values
+p <- c(p,summary(m)$coefficients[2,4])
+#if using Holm-Bonferroni correction:
+p.adjust(p)
 
 #Testing against chance: Learnable Pre-Exposure
 m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&testType=="familiarX"&condition=="Learnable Pre-Exposure"),family=binomial,glmerControl(optimizer="bobyqa"))
@@ -538,6 +560,9 @@ m <- glmer(isRight~conditionC+(1|participantCode),data=subset(d,exp=="exp2"&test
 summary(m)
 confint(m, method="Wald")[2:3,]
 
+#storing p-values
+p <- c(summary(m)$coefficients[2,4])
+
 #No Pre-Exposure vs. Non-Learnable Pre-Exposure
 d$conditionNonLearnableNoPreExp <- ifelse(d$conditionC==0.5,1.5,
                                           ifelse(d$conditionC==0,0.5,d$conditionC))
@@ -547,6 +572,9 @@ m <- glmer(isRight~conditionNonLearnableNoPreExp+(1|participantCode)+(1+conditio
 m <- glmer(isRight~conditionNonLearnableNoPreExp+(1|participantCode),data=subset(d,exp=="exp2"&testType=="novelX"&conditionNonLearnableNoPreExp!=1.5),family=binomial,glmerControl(optimizer="bobyqa"))
 summary(m)
 confint(m, method="Wald")[2:3,]
+
+#storing p-values
+p <- c(p,summary(m)$coefficients[2,4])
 
 #Learnable vs. No Pre-Exposure
 d$conditionLearnableNoPreExp <- ifelse(d$conditionC==-0.5,-1.5,
@@ -558,6 +586,10 @@ m <- glmer(isRight~conditionLearnableNoPreExp+(1|participantCode),data=subset(d,
 summary(m)
 confint(m, method="Wald")[2:3,]
 
+#storing p-values
+p <- c(p,summary(m)$coefficients[2,4])
+#if using Holm-Bonferroni correction:
+p.adjust(p)
 
 #Testing against chance: Learnable Pre-Exposure
 m <- glmer(isRight~1+(1|participantCode)+(1|stimulus),data=subset(d,exp=="exp2"&testType=="novelX"&condition=="Learnable Pre-Exposure"),family=binomial,glmerControl(optimizer="bobyqa"))
@@ -1268,7 +1300,7 @@ p1 <- ggplot(subset(test_type_exp,testType=="familiarX"&exp=="exp1"),aes(conditi
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
   geom_jitter(data=subset(subj_testType,testType=="familiarX"&exp=="exp1"), aes(y=acc), width = 0.05,height=0.01, alpha=0.6,shape=21)+
   geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
-  theme_classic(base_size=18)+
+  theme_classic(base_size=20)+
   geom_hline(yintercept=0.5, linetype="dotted")+
   scale_x_discrete(name="Condition",
                    breaks=c("Non-Learnable Pre-Exposure","Learnable Pre-Exposure"),
@@ -1276,6 +1308,7 @@ p1 <- ggplot(subset(test_type_exp,testType=="familiarX"&exp=="exp1"),aes(conditi
                    limits=c("Non-Learnable Pre-Exposure","Learnable Pre-Exposure"))+
   scale_fill_manual(values=c("#4DAF4A","#E41A1C"))+
   scale_color_manual(values=c("#4DAF4A","#E41A1C"))+
+  scale_y_continuous(breaks=seq(0,1,0.1))+
   theme(legend.position="none")+
   ylab("Accuracy - Familiar X Test")+
   xlab("Condition")
@@ -1285,7 +1318,7 @@ p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="exp1"),aes(condition,
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
   geom_jitter(data=subset(subj_testType,testType=="novelX"&exp=="exp1"),aes(y=acc), width = 0.05,height=0.01, alpha=0.6,shape=21)+
   geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
-  theme_classic(base_size=18)+
+  theme_classic(base_size=20)+
   geom_hline(yintercept=0.5, linetype="dotted")+
   scale_x_discrete(name="Condition",
                    breaks=c("Non-Learnable Pre-Exposure","Learnable Pre-Exposure"),
@@ -1293,6 +1326,7 @@ p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="exp1"),aes(condition,
                    limits=c("Non-Learnable Pre-Exposure","Learnable Pre-Exposure"))+
   scale_fill_manual(values=c("#4DAF4A","#E41A1C"))+
   scale_color_manual(values=c("#4DAF4A","#E41A1C"))+
+  scale_y_continuous(breaks=seq(0,1,0.1))+
   theme(legend.position="none")+
   ylab("Accuracy - Novel X Test")+
   xlab("Condition")
@@ -1304,7 +1338,7 @@ p1 <- ggplot(subset(test_type_exp,testType=="familiarX"&exp=="exp2"),aes(conditi
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
   geom_jitter(data=subset(subj_testType,testType=="familiarX"&exp=="exp2"), aes(y=acc),width = 0.05,height=0.01, alpha=0.6,shape=21)+
   geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
-  theme_classic(base_size=18)+
+  theme_classic(base_size=20)+
   geom_hline(yintercept=0.5, linetype="dotted")+
   scale_x_discrete(name="Condition",
                    breaks=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Learnable Pre-Exposure"),
@@ -1312,6 +1346,7 @@ p1 <- ggplot(subset(test_type_exp,testType=="familiarX"&exp=="exp2"),aes(conditi
                    limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Learnable Pre-Exposure"))+
   scale_fill_manual(values=c("#E41A1C","#377EB8","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Learnable Pre-Exposure"))+
   scale_color_manual(values=c("#E41A1C","#377EB8","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Learnable Pre-Exposure"))+
+  scale_y_continuous(breaks=seq(0,1,0.1))+
   theme(legend.position="none")+
   ylab("Accuracy - Familiar X Test")+
   xlab("Condition")
@@ -1321,7 +1356,7 @@ p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="exp2"),aes(condition,
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
   geom_jitter(data=subset(subj_testType,testType=="novelX"&exp=="exp2"),aes(y=acc), width = 0.05,height=0.01, alpha=0.6,shape=21)+
   geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
-  theme_classic(base_size=18)+
+  theme_classic(base_size=20)+
   geom_hline(yintercept=0.5, linetype="dotted")+
   scale_x_discrete(name="Condition",
                    breaks=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Learnable Pre-Exposure"),
@@ -1329,6 +1364,7 @@ p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="exp2"),aes(condition,
                    limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Learnable Pre-Exposure"))+
   scale_fill_manual(values=c("#E41A1C","#377EB8","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Learnable Pre-Exposure"))+
   scale_color_manual(values=c("#E41A1C","#377EB8","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Learnable Pre-Exposure"))+
+  scale_y_continuous(breaks=seq(0,1,0.1))+
   theme(legend.position="none")+
   ylab("Accuracy - Novel X Test")+
   xlab("Condition")
@@ -1340,7 +1376,7 @@ p1 <- ggplot(subset(test_type_exp,testType=="familiarX"&exp=="exp3"),aes(conditi
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
   geom_jitter(data=subset(subj_testType,testType=="familiarX"&exp=="exp3"),aes(y=acc), width = 0.05,height=0.01, alpha=0.6,shape=21)+
   geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
-  theme_classic(base_size=18)+
+  theme_classic(base_size=20)+
   geom_hline(yintercept=0.5, linetype="dotted")+
   scale_x_discrete(name="Condition",
                    breaks=c("Unstructured Pre-Exposure","Learnable Pre-Exposure"),
@@ -1348,6 +1384,7 @@ p1 <- ggplot(subset(test_type_exp,testType=="familiarX"&exp=="exp3"),aes(conditi
                    limits=c("Unstructured Pre-Exposure","Learnable Pre-Exposure"))+
   scale_fill_manual(values=c("#4DAF4A","#54278f"))+
   scale_color_manual(values=c("#4DAF4A","#54278f"))+
+  scale_y_continuous(breaks=seq(0,1,0.1))+
   theme(legend.position="none")+
   ylab("Accuracy - Familiar X Test")+
   xlab("Condition")
@@ -1357,7 +1394,7 @@ p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="exp3"),aes(condition,
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
   geom_jitter(data=subset(subj_testType,testType=="novelX"&exp=="exp3"), aes(y=acc),width = 0.05,height=0.01, alpha=0.6,shape=21)+
   geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
-  theme_classic(base_size=18)+
+  theme_classic(base_size=20)+
   geom_hline(yintercept=0.5, linetype="dotted")+
   scale_x_discrete(name="Condition",
                    breaks=c("Unstructured Pre-Exposure","Learnable Pre-Exposure"),
@@ -1365,6 +1402,7 @@ p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="exp3"),aes(condition,
                    limits=c("Unstructured Pre-Exposure","Learnable Pre-Exposure"))+
   scale_fill_manual(values=c("#4DAF4A","#54278f"))+
   scale_color_manual(values=c("#4DAF4A","#54278f"))+
+  scale_y_continuous(breaks=seq(0,1,0.1))+
   theme(legend.position="none")+
   ylab("Accuracy - Novel X Test")+
   xlab("Condition")
@@ -1376,13 +1414,14 @@ p1 <- ggplot(subset(test_type_exp,testType=="familiarX"&exp=="s1"),aes(condition
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
   geom_jitter(data=subset(subj_testType,testType=="familiarX"&exp=="s1"),aes(y=acc), width = 0.05,height=0.01, alpha=0.6,shape=21)+
   geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
-  theme_classic(base_size=18)+
+  theme_classic(base_size=20)+
   geom_hline(yintercept=0.5, linetype="dotted")+
   scale_x_discrete(name="Condition",
                    breaks=c("Learnable Pre-Exposure Only"),
                    labels=c("Learnable\nPre-Exposure\nOnly"))+
   scale_fill_manual(values=c("#265725"))+
   scale_color_manual(values=c("#265725"))+
+  scale_y_continuous(breaks=seq(0,1,0.1))+
   theme(legend.position="none")+
   ylab("Accuracy - Familiar X Test")+
   xlab("Condition")
@@ -1392,13 +1431,14 @@ p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="s1"),aes(condition,ac
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
   geom_jitter(data=subset(subj_testType,testType=="novelX"&exp=="s1"),aes(y=acc), width = 0.05,height=0.01, alpha=0.6,shape=21)+
   geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
-  theme_classic(base_size=18)+
+  theme_classic(base_size=20)+
   geom_hline(yintercept=0.5, linetype="dotted")+
   scale_x_discrete(name="Condition",
                    breaks=c("Learnable Pre-Exposure Only"),
                    labels=c("Learnable\nPre-Exposure\nOnly"))+
   scale_fill_manual(values=c("#265725"))+
   scale_color_manual(values=c("#265725"))+
+  scale_y_continuous(breaks=seq(0,1,0.1))+
   theme(legend.position="none")+
   ylab("Accuracy - Novel X Test")+
   xlab("Condition")
@@ -1406,11 +1446,11 @@ plot_grid(p1,p2, labels=c("A","B"),label_size=20)
 
 #S2: Overall accuracy plot
 #Familiar X test
-p1 <- ggplot(subset(test_type,testType=="familiarX"),aes(condition,accuracy,fill=condition, color=condition))+
+p1 <- ggplot(subset(test_type,testType=="familiarX"&condition!="Learnable Pre-Exposure Only"),aes(condition,accuracy,fill=condition, color=condition))+
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
-  geom_jitter(data=subset(subj_testType,testType=="familiarX"),aes(y=acc), width = 0.05,height=0.01, alpha=0.6,shape=21)+
+  geom_jitter(data=subset(subj_testType,testType=="familiarX"&condition!="Learnable Pre-Exposure Only"),aes(y=acc), width = 0.05,height=0.01, alpha=0.6,shape=21)+
   geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
-  theme_classic(base_size=11)+
+  theme_classic(base_size=20)+
   geom_hline(yintercept=0.5, linetype="dotted")+
   scale_x_discrete(name="Condition",
                    breaks=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Unstructured Pre-Exposure","Learnable Pre-Exposure"),
@@ -1418,16 +1458,17 @@ p1 <- ggplot(subset(test_type,testType=="familiarX"),aes(condition,accuracy,fill
                    limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Unstructured Pre-Exposure","Learnable Pre-Exposure"))+
   scale_fill_manual(values=c("#E41A1C","#377EB8","#54278f","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Unstructured Pre-Exposure","Learnable Pre-Exposure"))+
   scale_color_manual(values=c("#E41A1C","#377EB8","#54278f","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Unstructured Pre-Exposure","Learnable Pre-Exposure"))+
+  scale_y_continuous(breaks=seq(0,1,0.1))+
   theme(legend.position="none")+
   ylab("Accuracy - Familiar X Test")+
   xlab("Condition")
 
 #Novel X
-p2 <- ggplot(subset(test_type,testType=="novelX"),aes(condition,accuracy,fill=condition,color=condition))+
+p2 <- ggplot(subset(test_type,testType=="novelX"&condition!="Learnable Pre-Exposure Only"),aes(condition,accuracy,fill=condition,color=condition))+
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
-  geom_jitter(data=subset(subj_testType,testType=="novelX"),aes(y=acc), width = 0.05, height=0.01, alpha=0.6,shape=21)+
+  geom_jitter(data=subset(subj_testType,testType=="novelX"&condition!="Learnable Pre-Exposure Only"),aes(y=acc), width = 0.05, height=0.01, alpha=0.6,shape=21)+
   geom_errorbar(aes(ymin=accuracy-se,ymax=accuracy+se),color="black",position=position_dodge(.9),width=0.05, size=0.8)+
-  theme_classic(base_size=11)+
+  theme_classic(base_size=20)+
   geom_hline(yintercept=0.5, linetype="dotted")+
   scale_x_discrete(name="Condition",
                    breaks=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Unstructured Pre-Exposure","Learnable Pre-Exposure"),
@@ -1435,10 +1476,11 @@ p2 <- ggplot(subset(test_type,testType=="novelX"),aes(condition,accuracy,fill=co
                    limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Unstructured Pre-Exposure","Learnable Pre-Exposure"))+
   scale_fill_manual(values=c("#E41A1C","#377EB8","#54278f","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Unstructured Pre-Exposure","Learnable Pre-Exposure"))+
   scale_color_manual(values=c("#E41A1C","#377EB8","#54278f","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Unstructured Pre-Exposure","Learnable Pre-Exposure"))+
+  scale_y_continuous(breaks=seq(0,1,0.1))+
   theme(legend.position="none")+
   ylab("Accuracy - Novel X")+
   xlab("Condition")
-plot_grid(p1,p2, labels=c("A","B"),label_size=18)
+plot_grid(p1,p2, labels=c("A","B"),label_size=20)
 
 #####correlation plots
 #Experiment 1
@@ -1448,6 +1490,8 @@ ggplot(subset(subj_accuracy_wide,exp=="exp1"),aes(familiarX,novelX, color=condit
   scale_color_manual(name="Condition",values=c("#4DAF4A","#E41A1C"))+
   scale_linetype_discrete(name="Condition")+
   scale_shape_discrete(name="Condition")+
+  scale_x_continuous(breaks=seq(0,1,0.1))+
+  scale_y_continuous(breaks=seq(0,1,0.1))+
   ylab("Accuracy - Novel X")+
   xlab("Accuracy - Familiar X")+
   theme_classic(base_size=18)+
@@ -1460,12 +1504,13 @@ ggplot(subset(subj_accuracy_wide,exp=="exp2"),aes(familiarX,novelX, color=condit
   scale_color_manual(name="Condition",values=c("#4DAF4A","#377EB8","#E41A1C"))+
   scale_linetype_manual(name="Condition",values=c(1,4,2))+
   scale_shape_manual(name="Condition",values=c(16,15,17))+
-  scale_x_continuous(breaks=c(0.25, 0.5, 0.75, 1))+
-  scale_y_continuous(breaks=c(0.25, 0.5, 0.75, 1))+
+  scale_x_continuous(breaks=seq(0,1,0.1),limits=c(0.1,1.08))+
+  scale_y_continuous(breaks=seq(0,1,0.1),limits=c(0.1,1.08))+
   ylab("Accuracy - Novel X")+
   xlab("Accuracy - Familiar X")+
   theme_classic(base_size=18)+
   theme(legend.position=c(0.25,0.9))
+
 
 #Experiment 3
 ggplot(subset(subj_accuracy_wide,exp=="exp3"),aes(familiarX,novelX, color=condition,linetype=condition,shape=condition))+
@@ -1474,8 +1519,8 @@ ggplot(subset(subj_accuracy_wide,exp=="exp3"),aes(familiarX,novelX, color=condit
   scale_color_manual(name="Condition",values=c("#4DAF4A","#54278f"))+
   scale_linetype_manual(name="Condition",values=c(1,5))+
   scale_shape_manual(name="Condition",values=c(16,18))+
-  scale_x_continuous(breaks=c(0.25, 0.5, 0.75, 1))+
-  scale_y_continuous(breaks=c(0.25, 0.5, 0.75, 1))+
+  scale_x_continuous(breaks=seq(0,1,0.1),limits=c(0.15,1.06))+
+  scale_y_continuous(breaks=seq(0,1,0.1),limits=c(0.15,1.06))+
   ylab("Accuracy - Novel X")+
   xlab("Accuracy - Familiar X")+
   theme_classic(base_size=18)+
@@ -1488,8 +1533,8 @@ ggplot(subset(subj_accuracy_wide,exp=="s1"),aes(familiarX,novelX, color=conditio
   scale_color_manual(name="Condition",values=c("#265725"))+
   scale_linetype_manual(name="Condition",values=c(1))+
   scale_shape_manual(name="Condition",values=c(16))+
-  scale_x_continuous(breaks=c(0.25, 0.5, 0.75, 1))+
-  scale_y_continuous(breaks=c(0.25, 0.5, 0.75, 1))+
+  scale_x_continuous(breaks=seq(0,1,0.1),limits=c(0.2,1.06))+
+  scale_y_continuous(breaks=seq(0,1,0.1),limits=c(0.2,1.06))+
   ylab("Accuracy - Novel X")+
   xlab("Accuracy - Familiar X")+
   theme_classic(base_size=18)+
