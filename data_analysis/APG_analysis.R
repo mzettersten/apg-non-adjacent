@@ -1331,6 +1331,7 @@ p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="exp1"),aes(condition,
   ylab("Accuracy - Novel X Test")+
   xlab("Condition")
 plot_grid(p1,p2, labels=c("A","B"),label_size=20)
+ggsave("figures/exp1_test.tiff",width=11,height=6,dpi=300)
 
 #Experiment 2
 #Familiar X Test
@@ -1369,6 +1370,7 @@ p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="exp2"),aes(condition,
   ylab("Accuracy - Novel X Test")+
   xlab("Condition")
 plot_grid(p1,p2, labels=c("A","B"),label_size=18)
+ggsave("figures/exp2_test.tiff",width=13,height=7,dpi=300)
 
 #Experiment 3
 #Familiar X Test
@@ -1407,6 +1409,7 @@ p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="exp3"),aes(condition,
   ylab("Accuracy - Novel X Test")+
   xlab("Condition")
 plot_grid(p1,p2, labels=c("A","B"),label_size=20)
+ggsave("figures/exp3_test.tiff",width=11,height=6,dpi=300)
 
 #s1
 #Familiar X Test
@@ -1443,6 +1446,7 @@ p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="s1"),aes(condition,ac
   ylab("Accuracy - Novel X Test")+
   xlab("Condition")
 plot_grid(p1,p2, labels=c("A","B"),label_size=20)
+ggsave("figures/exps1_test.tiff",width=11,height=6,dpi=300)
 
 #S2: Overall accuracy plot
 #Familiar X test
@@ -1478,9 +1482,11 @@ p2 <- ggplot(subset(test_type,testType=="novelX"&condition!="Learnable Pre-Expos
   scale_color_manual(values=c("#E41A1C","#377EB8","#54278f","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Unstructured Pre-Exposure","Learnable Pre-Exposure"))+
   scale_y_continuous(breaks=seq(0,1,0.1))+
   theme(legend.position="none")+
-  ylab("Accuracy - Novel X")+
+  ylab("Accuracy - Novel X Test")+
   xlab("Condition")
 plot_grid(p1,p2, labels=c("A","B"),label_size=20)
+ggsave("figures/all_exps_test.tiff",width=14.8,height=8,dpi=300)
+
 
 #####correlation plots
 #Experiment 1
@@ -1496,6 +1502,8 @@ ggplot(subset(subj_accuracy_wide,exp=="exp1"),aes(familiarX,novelX, color=condit
   xlab("Accuracy - Familiar X")+
   theme_classic(base_size=18)+
   theme(legend.position=c(0.25,0.9))
+ggsave("figures/exp1_correlation.tiff",width=9,height=7,dpi=300)
+
 
 #Experiment 2
 ggplot(subset(subj_accuracy_wide,exp=="exp2"),aes(familiarX,novelX, color=condition,linetype=condition,shape=condition))+
@@ -1510,7 +1518,7 @@ ggplot(subset(subj_accuracy_wide,exp=="exp2"),aes(familiarX,novelX, color=condit
   xlab("Accuracy - Familiar X")+
   theme_classic(base_size=18)+
   theme(legend.position=c(0.25,0.9))
-
+ggsave("figures/exp2_correlation.tiff",width=9,height=7,dpi=300)
 
 #Experiment 3
 ggplot(subset(subj_accuracy_wide,exp=="exp3"),aes(familiarX,novelX, color=condition,linetype=condition,shape=condition))+
@@ -1525,6 +1533,8 @@ ggplot(subset(subj_accuracy_wide,exp=="exp3"),aes(familiarX,novelX, color=condit
   xlab("Accuracy - Familiar X")+
   theme_classic(base_size=18)+
   theme(legend.position=c(0.25,0.9))
+ggsave("figures/exp3_correlation.tiff",width=9,height=7,dpi=300)
+
 
 #S1
 ggplot(subset(subj_accuracy_wide,exp=="s1"),aes(familiarX,novelX, color=condition,linetype=condition,shape=condition))+
@@ -1539,4 +1549,6 @@ ggplot(subset(subj_accuracy_wide,exp=="s1"),aes(familiarX,novelX, color=conditio
   xlab("Accuracy - Familiar X")+
   theme_classic(base_size=18)+
   theme(legend.position=c(0.25,0.9))
+ggsave("figures/exps1_correlation.tiff",width=9,height=7,dpi=300)
+
 

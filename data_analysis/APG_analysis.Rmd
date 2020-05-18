@@ -222,7 +222,7 @@ p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="exp1"),aes(condition,
   scale_fill_manual(values=c("#4DAF4A","#E41A1C"))+
   scale_color_manual(values=c("#4DAF4A","#E41A1C"))+
   theme(legend.position="none")+
-  ylab("Accuracy - Novel X")+
+  ylab("Accuracy - Novel X Test")+
   xlab("Condition")
 plot_grid(p1,p2, labels=c("A","B"),label_size=18)
 ```
@@ -288,8 +288,8 @@ ggplot(subset(subj_accuracy_wide,exp=="exp1"),aes(familiarX,novelX, color=condit
   scale_color_manual(name="Condition",values=c("#4DAF4A","#E41A1C"))+
   scale_linetype_discrete(name="Condition")+
   scale_shape_discrete(name="Condition")+
-  ylab("Accuracy - novelX")+
-  xlab("Accuracy - familiarX")+
+  ylab("Accuracy - Novel X")+
+  xlab("Accuracy - Familiar X")+
   theme_classic(base_size=18)+
   theme(legend.position=c(0.3,0.9))
 ```
@@ -692,7 +692,7 @@ p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="exp2"),aes(condition,
   scale_fill_manual(values=c("#E41A1C","#377EB8","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Learnable Pre-Exposure"))+
   scale_color_manual(values=c("#E41A1C","#377EB8","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Learnable Pre-Exposure"))+
   theme(legend.position="none")+
-  ylab("Accuracy - Novel X")+
+  ylab("Accuracy - Novel X Test")+
   xlab("Condition")
 plot_grid(p1,p2, labels=c("A","B"),label_size=18)
 ```
@@ -762,7 +762,7 @@ ggplot(subset(subj_accuracy_wide,exp=="exp2"),aes(familiarX,novelX, color=condit
   scale_color_manual(name="Condition",values=c("#4DAF4A","#377EB8","#E41A1C"))+
   scale_linetype_manual(name="Condition",values=c(1,4,2))+
   scale_shape_manual(name="Condition",values=c(16,15,17))+
-  ylab("Accuracy - novelX")+
+  ylab("Accuracy - Novel X")+
   xlab("Accuracy - Familiar X")+
   theme_classic(base_size=18)+
   theme(legend.position=c(0.3,0.9))
@@ -2354,7 +2354,7 @@ p2 <- ggplot(subset(test_type,testType=="novelX"),aes(condition,accuracy,fill=co
   scale_fill_manual(values=c("#E41A1C","#377EB8","#54278f","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Unstructured Pre-Exposure","Learnable Pre-Exposure"))+
   scale_color_manual(values=c("#E41A1C","#377EB8","#54278f","#4DAF4A"),limits=c("Non-Learnable Pre-Exposure","No Pre-Exposure","Unstructured Pre-Exposure","Learnable Pre-Exposure"))+
   theme(legend.position="none")+
-  ylab("Accuracy - Novel X")+
+  ylab("Accuracy - Novel X Test")+
   xlab("Condition")
 plot_grid(p1,p2, labels=c("A","B"),label_size=18)
 ```
@@ -2523,7 +2523,7 @@ p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="s1"),aes(condition,ac
   scale_fill_manual(values=c("#265725"))+
   scale_color_manual(values=c("#265725"))+
   theme(legend.position="none")+
-  ylab("Accuracy - Novel X")+
+  ylab("Accuracy - Novel X Test")+
   xlab("Condition")
 plot_grid(p1,p2, labels=c("A","B"),label_size=20)
 ```
