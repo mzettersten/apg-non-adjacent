@@ -1448,7 +1448,7 @@ p2 <- ggplot(subset(test_type_exp,testType=="novelX"&exp=="s1"),aes(condition,ac
 plot_grid(p1,p2, labels=c("A","B"),label_size=20)
 ggsave("figures/exps1_test.tiff",width=11,height=6,dpi=300)
 
-#S2: Overall accuracy plot
+#S4: Overall accuracy plot
 #Familiar X test
 p1 <- ggplot(subset(test_type,testType=="familiarX"&condition!="Learnable Pre-Exposure Only"),aes(condition,accuracy,fill=condition, color=condition))+
   geom_bar(position=position_dodge(.9), stat="identity", size=1.2,alpha=0.3, width=0.7)+
