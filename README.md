@@ -3,7 +3,8 @@ Stimuli, data, and analysis scripts for APG non-adjacent dependency learning stu
 
 Zettersten, M., Potter, C., & Saffran, J. (2020). Tuning in to non-adjacencies: Exposure to learnable patterns supports discovering otherwise difficult structures. Cognition, 104283. doi: [10.1016/j.cognition.2020.104283](https://doi.org/10.1016/j.cognition.2020.104283)
 
-Abstract:
+**Abstract**
+
 Non-adjacent dependencies are ubiquitous in language, but difficult to learn in artificial language experiments in the lab. Previous research suggests that non-adjacent dependencies are more learnable given structural support in the input – for instance, in the presence of high variability between dependent items. However, not all non-adjacent dependencies occur in supportive contexts. How are such regularities learned? One possibility is that learning one set of non-adjacent dependencies can highlight similar structures in subsequent input, facilitating the acquisition of new non-adjacent dependencies that are otherwise difficult to learn. In three experiments, we show that prior exposure to learnable non-adjacent dependencies - i.e., dependencies presented in a learning context that has been shown to facilitate discovery - improves learning of novel non-adjacent regularities that are typically not detected. These findings demonstrate how the discovery of complex linguistic structures can build on past learning in supportive contexts.
 
 ## Data & Analysis
