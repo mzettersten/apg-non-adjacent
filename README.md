@@ -1,8 +1,7 @@
 # apg-non-adjacent
 Stimuli, data, and analysis scripts for APG non-adjacent dependency learning study.
 
-Tuning in to non-adjacencies: Exposure to learnable patterns supports discovering otherwise difficult structures 
-(Zettersten, Potter, and Saffran)
+ Zettersten, M., Potter, C., & Saffran, J. (2020). Tuning in to non-adjacencies: Exposure to learnable patterns supports discovering otherwise difficult structures. Cognition, 104283. doi: [10.1016/j.cognition.2020.104283](https://doi.org/10.1016/j.cognition.2020.104283)
 
 ## Data & Analysis
 
